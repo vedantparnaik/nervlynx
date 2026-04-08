@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "shuttle-stack"
+name = "nervlynx"
 version = "0.1.0"
-description = "Fixed-route shuttle ADAS research foundation"
+description = "Reusable robotics runtime core with ADAS reference stack"
 requires-python = ">=3.10"
 dependencies = [
   "pycapnp>=2.0.0",

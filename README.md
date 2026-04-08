@@ -1,102 +1,72 @@
-# Shuttle Stack (Weeks 1-4 Foundation)
+# NervLynx
 
-This repository contains a minimal, production-minded ADAS research foundation for a fixed-route shuttle.
+NervLynx is an open robotics runtime backbone for reliable, traceable robot pipelines.
 
-## Included in this build
+It includes:
+- `robot_core`: generic, reusable runtime for Sensor Ingest -> Perception/Fusion -> Planning/Action flows
+- `shuttle`: a fixed-route ADAS reference stack built on the same patterns
 
-- Cap'n Proto message schema (`schemas/shuttle.capnp`)
-- ZeroMQ topic pub/sub transport
-- Service registry with expected rates and criticality
-- Monotonic message headers with sequence numbers
-- Heartbeat + watchdog fault detector
-- Safety state machine process (`normal`, `caution`, `mrs`)
-- Multi-process pipeline:
-  - `state_estimator`
-  - `route_manager`
-  - `planner`
-  - `controller`
-  - `safety_manager`
-- Logger and replay tools for offline debugging
-- Sensor adapter interfaces with `synthetic` and `replay` modes
-- Route profile config for teach-and-repeat style operation (`configs/route_loop.yaml`)
+## Core capabilities
+
+- Typed runtime envelopes with `topic`, `source`, `sequence`, `timestamp`, `schema`, and `trace_id`
+- Pluggable topic graph via `PipelineRuntime`
+- Node heartbeat tracking and liveness checks via `HealthWatchdog`
+- JSONL record/replay for deterministic debugging
+- Smoke scenario for a surveillance robot (HQ telemetry + alert path)
 
 ## Quick start
 
-1. Install dependencies:
-
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -U pip
-   pip install -e .
-   ```
-
-2. Run one process per terminal:
-
-   ```bash
-   shuttle-stack run-broker
-   shuttle-stack run-state
-   shuttle-stack run-route-manager --route configs/route_loop.yaml
-   shuttle-stack run-planner
-   shuttle-stack run-controller
-   shuttle-stack run-watchdog
-   shuttle-stack run-safety-manager
-   ```
-
-3. Optional logging and replay:
-
-   ```bash
-   shuttle-stack run-logger --output logs/session.jsonl
-   shuttle-stack replay --input logs/session.jsonl --mode realtime
-   ```
-
-## ODD assumptions baked into this baseline
-
-- Fixed route
-- Daylight, dry weather
-- Operator in loop
-- Low-speed initial operation
-- Minimal-risk-stop behavior handled by watchdog alerts and command gating hooks
-
-## Notes
-
-- This is a Week 1-4 software foundation. Real sensor drivers and drive-by-wire integration are intentionally not included yet.
-- Cap'n Proto schema is versioned through `schemaVersion` fields and should be evolved with backward compatibility in mind.
-
-## Testing
-
-Install dev dependencies and run:
-
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
 pip install -e ".[dev]"
-pytest -q
 ```
 
-## Robotics Core Skeleton (Reusable Beyond ADAS)
+## Run examples
 
-This repository now also includes a generic runtime skeleton in `robot_core/` for building non-vehicle robotics stacks.
-
-### What it gives you
-
-- Typed runtime envelopes with topic, source, sequence, timestamp, schema, and `trace_id`
-- Pluggable topic graph (`PipelineRuntime`) for Sensor Ingest -> Perception/Fusion -> Planning/Action dataflow
-- Node heartbeat tracking and a generic liveness watchdog (`HealthWatchdog`)
-- JSONL record/replay helpers for deterministic debugging (`robot_core.recorder`)
-- A runnable reference flow (`sensors.raw` -> `perception.state` -> `control.intent`)
-
-### Quick try
+Generic core example:
 
 ```bash
-pip install -e ".[dev]"
 robot-core run-example --output logs/robot_core_trace.jsonl
 robot-core replay logs/robot_core_trace.jsonl
 ```
 
-### How to extend for your robot
+Surveillance smoke test:
 
-1. Replace the example producer with your adapters (N cameras, GPS, IMU, LiDAR, etc.)
-2. Add processing nodes that subscribe/publish the topics your stack needs
-3. Define watchdog thresholds per critical node/topic
-4. Record every run and replay traces when regressions show up
+```bash
+robot-core smoke-surveillance --output logs/smoke_surveillance_trace.jsonl
+pytest -q
+```
 
-This keeps the hard parts centralized: graph wiring, traceable dataflow, and post-failure debugging.
+Shuttle ADAS stack:
+
+```bash
+shuttle-stack run-broker
+shuttle-stack run-state
+shuttle-stack run-route-manager --route configs/route_loop.yaml
+shuttle-stack run-planner
+shuttle-stack run-controller
+shuttle-stack run-watchdog
+shuttle-stack run-safety-manager
+```
+
+## Repository layout
+
+- `robot_core/`: reusable robotics runtime skeleton
+- `shuttle/`: fixed-route shuttle reference implementation
+- `configs/`: service rates and route profiles
+- `schemas/`: Cap'n Proto schemas
+- `tests/`: unit tests and smoke checks
+
+## Extending to your robot
+
+1. Add adapters for your sensors (multi-camera, GPS, IMU, LiDAR, mic, etc.)
+2. Define topic contracts and processing nodes
+3. Set watchdog thresholds for critical paths
+4. Record traces in every run and replay failures deterministically
+
+## Notes
+
+- This project is intended as a practical foundation, not a full production autonomy stack.
+- Safety and deployment decisions should be adapted to your platform and compliance requirements.
