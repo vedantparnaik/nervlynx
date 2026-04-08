@@ -1,0 +1,32 @@
+publisher_address: "tcp://127.0.0.1:5557"
+subscriber_address: "tcp://127.0.0.1:5558"
+
+topics:
+  vehicleState:
+    hz: 100
+    critical: true
+    schema: "VehicleState"
+  routeProgress:
+    hz: 20
+    critical: true
+    schema: "RouteProgress"
+  plannerTrajectory:
+    hz: 20
+    critical: true
+    schema: "PlannerTrajectory"
+  controlCommand:
+    hz: 100
+    critical: true
+    schema: "ControlCommand"
+  heartbeat:
+    hz: 1
+    critical: true
+    schema: "Heartbeat"
+  safetyState:
+    hz: 20
+    critical: true
+    schema: "SafetyState"
+  faultEvent:
+    hz: 1
+    critical: false
+    schema: "FaultEvent"

@@ -1,0 +1,13 @@
+name: "demo_loop"
+loop: true
+points:
+  - distance_m: 0.0
+    speed_mps: 1.5
+  - distance_m: 30.0
+    speed_mps: 2.5
+  - distance_m: 60.0
+    speed_mps: 3.5
+  - distance_m: 90.0
+    speed_mps: 2.0
+  - distance_m: 120.0
+    speed_mps: 1.5
