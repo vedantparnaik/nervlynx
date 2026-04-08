@@ -39,6 +39,15 @@ robot-core smoke-surveillance --output logs/smoke_surveillance_trace.jsonl
 pytest -q
 ```
 
+C++ core smoke test:
+
+```bash
+cmake -S cpp_core -B cpp_core/build
+cmake --build cpp_core/build
+./cpp_core/build/smoke_surveillance
+ctest --test-dir cpp_core/build --output-on-failure
+```
+
 Shuttle ADAS stack:
 
 ```bash

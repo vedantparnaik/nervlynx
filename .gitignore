@@ -5,3 +5,5 @@ __pycache__/
 logs/*.jsonl
 .DS_Store
 *.egg-info/
+build/
+cpp_core/build/
