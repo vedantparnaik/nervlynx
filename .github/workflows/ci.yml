@@ -21,6 +21,10 @@ jobs:
         run: pytest -q
       - name: Run smoke matrix
         run: robot-core smoke-matrix --output-dir logs/smoke_matrix
+      - name: Contracts check
+        run: robot-core contracts-check
+      - name: Graph run
+        run: robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
 
   cpp-tests:
     runs-on: ubuntu-latest

@@ -1,10 +1,31 @@
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import Iterable
 
 from robot_core.runtime import Envelope, RuntimeMessage
+
+
+def _encode_payload(value: object) -> object:
+  if isinstance(value, bytes):
+    return {"__bytes_b64__": base64.b64encode(value).decode("ascii")}
+  if isinstance(value, dict):
+    return {str(k): _encode_payload(v) for k, v in value.items()}
+  if isinstance(value, list):
+    return [_encode_payload(v) for v in value]
+  return value
+
+
+def _decode_payload(value: object) -> object:
+  if isinstance(value, dict):
+    if "__bytes_b64__" in value:
+      return base64.b64decode(str(value["__bytes_b64__"]))
+    return {str(k): _decode_payload(v) for k, v in value.items()}
+  if isinstance(value, list):
+    return [_decode_payload(v) for v in value]
+  return value
 
 
 def _encode(msg: RuntimeMessage) -> dict[str, object]:
@@ -16,7 +37,7 @@ def _encode(msg: RuntimeMessage) -> dict[str, object]:
     "monotonic_time_ns": e.monotonic_time_ns,
     "trace_id": e.trace_id,
     "schema": e.schema,
-    "payload": msg.payload,
+    "payload": _encode_payload(msg.payload),
   }
 
 
@@ -29,7 +50,9 @@ def _decode(row: dict[str, object]) -> RuntimeMessage:
     trace_id=str(row["trace_id"]),
     schema=str(row["schema"]),
   )
-  payload = dict(row["payload"])  # type: ignore[arg-type]
+  payload = _decode_payload(dict(row["payload"]))  # type: ignore[arg-type]
+  if not isinstance(payload, dict):
+    raise ValueError("decoded payload must be a dict")
   return RuntimeMessage(envelope=env, payload=payload)
 
 

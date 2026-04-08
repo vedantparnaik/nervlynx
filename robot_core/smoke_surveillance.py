@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from robot_core.contracts import default_contracts, validate_payload
 from robot_core.recorder import write_jsonl
 from robot_core.runtime import PipelineRuntime, RuntimeMessage
 from robot_core.watchdog import HealthWatchdog
@@ -19,7 +20,7 @@ class SmokeResult:
 
 
 def build_surveillance_runtime() -> PipelineRuntime:
-  rt = PipelineRuntime()
+  rt = PipelineRuntime(topic_priority={"hq.alert": 1, "actuation.command": 2, "hq.telemetry": 3})
 
   def perception_handler(msg: RuntimeMessage):
     if msg.envelope.topic != "sensors.bundle":
@@ -105,6 +106,7 @@ def build_surveillance_runtime() -> PipelineRuntime:
   def uplink_handler(msg: RuntimeMessage):
     if msg.envelope.topic != "actuation.command":
       return []
+    battery = float(msg.payload.get("battery_pct", 74.0))
     return [
       (
         "hq.telemetry",
@@ -113,7 +115,7 @@ def build_surveillance_runtime() -> PipelineRuntime:
           "link": "wifi",
           "robot_id": "sr-3w-demo",
           "status": "online",
-          "battery_pct": 74.0,
+          "battery_pct": battery,
         },
       )
     ]
@@ -146,6 +148,15 @@ def run_surveillance_smoke(
   payload = dict(DEFAULT_SURVEILLANCE_PAYLOAD)
   if sensor_payload:
     payload.update(sensor_payload)
+  contract_issues = validate_payload(default_contracts()["sensors.bundle"], payload)
+  if contract_issues:
+    return SmokeResult(
+      ok=False,
+      message_count=0,
+      topics=[],
+      watchdog_faults=[i.message for i in contract_issues],
+      output_path=Path(output_path),
+    )
   seed = rt.publish(
     topic="sensors.bundle",
     source="sensor_hub",

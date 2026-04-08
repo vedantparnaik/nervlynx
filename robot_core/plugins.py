@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib.metadata import entry_points
 from typing import Protocol
 
 from robot_core.runtime import RuntimeMessage
@@ -50,3 +51,18 @@ class PluginRegistry:
 
   def catalog(self) -> PluginCatalog:
     return PluginCatalog(sensors=sorted(self._sensors), nodes=sorted(self._nodes))
+
+  def discover_entrypoints(self) -> None:
+    """Load plugins from Python entry points.
+
+    - group `nervlynx.sensors`: callable returning SensorPlugin instance
+    - group `nervlynx.nodes`: callable returning NodePlugin instance
+    """
+    sensor_eps = entry_points(group="nervlynx.sensors")
+    node_eps = entry_points(group="nervlynx.nodes")
+    for ep in sensor_eps:
+      plugin_factory = ep.load()
+      self.register_sensor(plugin_factory())
+    for ep in node_eps:
+      plugin_factory = ep.load()
+      self.register_node(plugin_factory())

@@ -21,6 +21,13 @@ dev = ["pytest>=8.0.0"]
 shuttle-stack = "shuttle.cli:app"
 robot-core = "robot_core.cli:app"
 
+[project.entry-points."nervlynx.sensors"]
+synthetic_surveillance_sensor = "robot_core.builtin_plugins:SyntheticSensorPlugin"
+
+[project.entry-points."nervlynx.nodes"]
+perception_node = "robot_core.builtin_plugins:PerceptionNodePlugin"
+planner_node = "robot_core.builtin_plugins:PlannerNodePlugin"
+
 [tool.setuptools]
 package-dir = {"" = "."}
 

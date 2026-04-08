@@ -13,6 +13,13 @@ class TopicStats:
   avg_delta_ms: float
 
 
+@dataclass(frozen=True)
+class FlowStats:
+  trace_id: str
+  topic_count: int
+  end_to_end_ms: float
+
+
 def timeline_by_trace(messages: list[RuntimeMessage]) -> dict[str, list[RuntimeMessage]]:
   grouped: dict[str, list[RuntimeMessage]] = {}
   for msg in messages:
@@ -40,3 +47,22 @@ def topic_latency_stats(messages: list[RuntimeMessage]) -> list[TopicStats]:
 
 def structured_event(kind: str, detail: dict[str, Any]) -> dict[str, Any]:
   return {"event_kind": kind, "detail": detail}
+
+
+def flow_stats(messages: list[RuntimeMessage]) -> list[FlowStats]:
+  grouped = timeline_by_trace(messages)
+  out: list[FlowStats] = []
+  for trace_id, trace in grouped.items():
+    if not trace:
+      continue
+    start_ns = trace[0].envelope.monotonic_time_ns
+    end_ns = trace[-1].envelope.monotonic_time_ns
+    out.append(
+      FlowStats(
+        trace_id=trace_id,
+        topic_count=len(trace),
+        end_to_end_ms=max(0.0, (end_ns - start_ns) / 1e6),
+      )
+    )
+  out.sort(key=lambda x: x.end_to_end_ms, reverse=True)
+  return out

@@ -1,5 +1,5 @@
 from robot_core.contracts import TopicContract, check_contract_migration, default_contracts, validate_payload
-from robot_core.observability import structured_event, timeline_by_trace, topic_latency_stats
+from robot_core.observability import flow_stats, structured_event, timeline_by_trace, topic_latency_stats
 from robot_core.runtime import Envelope, RuntimeMessage
 
 
@@ -7,6 +7,8 @@ def test_contract_validation_detects_missing_field() -> None:
   c = default_contracts()["mission.command"]
   issues = validate_payload(c, {"mode": "safe_slow_patrol"})
   assert any("missing required field" in i.message for i in issues)
+  type_issues = validate_payload(c, {"mode": "safe_slow_patrol", "speed_limit_mps": "fast", "waypoint_id": "w1"})
+  assert any("invalid type for speed_limit_mps" in i.message for i in type_issues)
 
 
 def test_contract_migration_flags_required_field_removal() -> None:
@@ -34,5 +36,7 @@ def test_observability_timeline_and_stats() -> None:
   stats = topic_latency_stats([m1, m2, m3])
   stat_map = {s.topic: s for s in stats}
   assert stat_map["t.a"].avg_delta_ms > 0
+  flows = flow_stats([m1, m2, m3])
+  assert any(f.trace_id == "trace-1" for f in flows)
   evt = structured_event("fault", {"node": "planner"})
   assert evt["event_kind"] == "fault"

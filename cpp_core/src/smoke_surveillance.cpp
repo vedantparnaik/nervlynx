@@ -1,11 +1,13 @@
 #include <algorithm>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
+#include "nervlynx/contracts.hpp"
+#include "nervlynx/observability.hpp"
+#include "nervlynx/recorder.hpp"
 #include "nervlynx/runtime.hpp"
 #include "nervlynx/watchdog.hpp"
 
@@ -15,42 +17,6 @@ using nervlynx::Payload;
 using nervlynx::PipelineRuntime;
 using nervlynx::PublishRequest;
 using nervlynx::RuntimeMessage;
-using nervlynx::Value;
-
-std::string value_to_json(const Value& v) {
-  if (const auto* d = std::get_if<double>(&v)) {
-    return std::to_string(*d);
-  }
-  if (const auto* b = std::get_if<bool>(&v)) {
-    return *b ? "true" : "false";
-  }
-  const auto* s = std::get_if<std::string>(&v);
-  return "\"" + (*s) + "\"";
-}
-
-void write_trace_jsonl(const std::string& path, const std::vector<RuntimeMessage>& trace) {
-  std::ofstream out(path);
-  for (const auto& msg : trace) {
-    out << "{";
-    out << "\"topic\":\"" << msg.envelope.topic << "\",";
-    out << "\"source\":\"" << msg.envelope.source << "\",";
-    out << "\"sequence\":" << msg.envelope.sequence << ",";
-    out << "\"monotonic_time_ns\":" << msg.envelope.monotonic_time_ns << ",";
-    out << "\"trace_id\":\"" << msg.envelope.trace_id << "\",";
-    out << "\"schema\":\"" << msg.envelope.schema << "\",";
-    out << "\"payload\":{";
-    bool first = true;
-    for (const auto& [k, v] : msg.payload) {
-      if (!first) {
-        out << ",";
-      }
-      first = false;
-      out << "\"" << k << "\":" << value_to_json(v);
-    }
-    out << "}}";
-    out << "\n";
-  }
-}
 
 PipelineRuntime build_surveillance_runtime() {
   PipelineRuntime rt;
@@ -180,9 +146,20 @@ int main() {
       {"speaker_ok", true},
     }
   );
+  const nervlynx::TopicContract seed_contract{
+    "sensors.bundle",
+    "SensorBundle",
+    1,
+    {"camera_count", "gps_fix", "imu_ok", "ai_ok"},
+  };
+  const auto contract_issues = nervlynx::validate_payload(seed_contract, seed.payload);
+  if (!contract_issues.empty()) {
+    std::cerr << "FAIL contract validation\n";
+    return 1;
+  }
 
   const auto trace = rt.run_once(seed);
-  write_trace_jsonl("logs/smoke_surveillance_trace_cpp.jsonl", trace);
+  nervlynx::write_jsonl("logs/smoke_surveillance_trace_cpp.jsonl", trace);
 
   std::unordered_set<std::string> topics;
   std::vector<std::string> ordered_topics;
@@ -199,6 +176,7 @@ int main() {
   }
   const nervlynx::HealthWatchdog watchdog(0.75);
   const auto faults = watchdog.check(rt.node_heartbeats_ns(), max_hb);
+  const auto stats = nervlynx::topic_stats(trace);
 
   const std::unordered_set<std::string> required{
     "sensors.bundle",
@@ -229,6 +207,7 @@ int main() {
   if (!faults.empty()) {
     std::cout << " watchdog_faults=" << faults.size();
   }
+  std::cout << " topic_stats=" << stats.size();
   std::cout << "\n";
 
   return ok ? 0 : 1;

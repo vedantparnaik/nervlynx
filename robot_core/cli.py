@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import typer
 
+from robot_core.builtin_plugins import register_builtin_plugins
 from robot_core.contracts import check_contract_migration, default_contracts
 from robot_core.examples import build_reference_runtime
-from robot_core.observability import topic_latency_stats
+from robot_core.graph import load_graph_config, wire_graph_from_config
+from robot_core.metrics import MetricsRegistry, serve_metrics
+from robot_core.observability import flow_stats, topic_latency_stats
 from robot_core.plugins import PluginRegistry
 from robot_core.recorder import read_jsonl, write_jsonl
+from robot_core.runtime import PipelineRuntime
 from robot_core.smoke_matrix import run_smoke_matrix
 from robot_core.smoke_surveillance import run_surveillance_smoke
+from robot_core.supervisor import ManagedNode, RuntimeSupervisor
 
 app = typer.Typer(help="Generic robotics runtime skeleton CLI.")
 
@@ -64,6 +70,8 @@ def inspect_trace(input: Path) -> None:
   events = read_jsonl(input)
   for stat in topic_latency_stats(events):
     typer.echo(f"topic={stat.topic} count={stat.count} avg_delta_ms={stat.avg_delta_ms:.3f}")
+  for stat in flow_stats(events):
+    typer.echo(f"trace={stat.trace_id[:8]} messages={stat.topic_count} e2e_ms={stat.end_to_end_ms:.3f}")
 
 
 @app.command("contracts-check")
@@ -86,5 +94,67 @@ def contracts_check() -> None:
 @app.command("plugin-catalog")
 def plugin_catalog() -> None:
   reg = PluginRegistry()
+  reg.discover_entrypoints()
+  if not reg.catalog().nodes and not reg.catalog().sensors:
+    register_builtin_plugins(reg)
   cat = reg.catalog()
   typer.echo(f"sensors={len(cat.sensors)} nodes={len(cat.nodes)}")
+
+
+@app.command("serve-metrics")
+def serve_metrics_cmd(duration_s: float = 5.0, port: int = 9108) -> None:
+  reg = MetricsRegistry()
+  reg.inc("nervlynx_boot_total", 1)
+  reg.set_gauge("nervlynx_uptime_seconds", 0.0)
+  server = serve_metrics(reg, port=port)
+  started = time.monotonic()
+  while time.monotonic() - started < duration_s:
+    reg.set_gauge("nervlynx_uptime_seconds", time.monotonic() - started)
+    time.sleep(0.2)
+  server.shutdown()
+  typer.echo(f"metrics_server_stopped port={port}")
+
+
+@app.command("supervisor-demo")
+def supervisor_demo() -> None:
+  order: list[str] = []
+
+  def mk_start(name: str):
+    return lambda: order.append("start:" + name)
+
+  def mk_stop(name: str):
+    return lambda: order.append("stop:" + name)
+
+  sup = RuntimeSupervisor()
+  sup.register(ManagedNode("transport", start=mk_start("transport"), stop=mk_stop("transport")))
+  sup.register(
+    ManagedNode(
+      "planner",
+      start=mk_start("planner"),
+      stop=mk_stop("planner"),
+      dependencies=("transport",),
+    )
+  )
+  sup.start_all()
+  sup.stop_all()
+  typer.echo(",".join(order))
+
+
+@app.command("run-graph")
+def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> None:
+  reg = PluginRegistry()
+  reg.discover_entrypoints()
+  if not reg.catalog().nodes and not reg.catalog().sensors:
+    register_builtin_plugins(reg)
+  runtime = PipelineRuntime(topic_priority={"safety.event": 1})
+  cfg = load_graph_config(config)
+  wire_graph_from_config(runtime, reg, cfg)
+  seed = runtime.publish(
+    topic=str(cfg.get("seed_topic", "sensors.bundle")),
+    source="graph_runner",
+    schema=str(cfg.get("seed_schema", "SensorBundle")),
+    payload=dict(cfg.get("seed_payload", {})),
+  )
+  trace = runtime.run_once(seed)
+  write_jsonl(output, trace)
+  typer.echo(f"trace_messages={len(trace)} output={output}")
