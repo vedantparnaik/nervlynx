@@ -1,0 +1,15 @@
+[Unit]
+Description=NervLynx surveillance smoke runner
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nervlynx
+ExecStart=/opt/nervlynx/.venv/bin/robot-core smoke-surveillance --output /var/log/nervlynx/smoke_surveillance.jsonl
+Restart=on-failure
+RestartSec=2
+User=nervlynx
+Group=nervlynx
+
+[Install]
+WantedBy=multi-user.target

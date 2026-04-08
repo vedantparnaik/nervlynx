@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 logs/*.jsonl
+logs/**/*.jsonl
 .DS_Store
 *.egg-info/
 build/

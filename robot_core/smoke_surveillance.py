@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from robot_core.recorder import write_jsonl
 from robot_core.runtime import PipelineRuntime, RuntimeMessage
@@ -124,22 +125,32 @@ def build_surveillance_runtime() -> PipelineRuntime:
   return rt
 
 
-def run_surveillance_smoke(output_path: str | Path = "logs/smoke_surveillance_trace.jsonl") -> SmokeResult:
+DEFAULT_SURVEILLANCE_PAYLOAD: dict[str, Any] = {
+  "camera_count": 4,
+  "gps_fix": True,
+  "imu_ok": True,
+  "ai_ok": True,
+  "wifi_rssi_dbm": -61,
+  "motion_detected": True,
+  "mic_anomaly": False,
+  "speaker_ok": True,
+}
+
+
+def run_surveillance_smoke(
+  output_path: str | Path = "logs/smoke_surveillance_trace.jsonl",
+  sensor_payload: dict[str, Any] | None = None,
+  require_alert: bool = True,
+) -> SmokeResult:
   rt = build_surveillance_runtime()
+  payload = dict(DEFAULT_SURVEILLANCE_PAYLOAD)
+  if sensor_payload:
+    payload.update(sensor_payload)
   seed = rt.publish(
     topic="sensors.bundle",
     source="sensor_hub",
     schema="SensorBundle",
-    payload={
-      "camera_count": 4,
-      "gps_fix": True,
-      "imu_ok": True,
-      "ai_ok": True,
-      "wifi_rssi_dbm": -61,
-      "motion_detected": True,
-      "mic_anomaly": False,
-      "speaker_ok": True,
-    },
+    payload=payload,
   )
   trace = rt.run_once(seed)
   out = Path(output_path)
@@ -153,8 +164,9 @@ def run_surveillance_smoke(output_path: str | Path = "logs/smoke_surveillance_tr
     "mission.command",
     "actuation.command",
     "hq.telemetry",
-    "hq.alert",
   }
+  if require_alert:
+    required_topics.add("hq.alert")
   ok = required_topics.issubset(set(topics)) and len(faults) == 0 and len(trace) >= 6
   return SmokeResult(
     ok=ok,

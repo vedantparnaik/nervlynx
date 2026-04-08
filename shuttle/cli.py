@@ -17,7 +17,7 @@ from shuttle.processes import (
   run_watchdog,
 )
 
-app = typer.Typer(help="Fixed-route shuttle ADAS stack CLI.")
+app = typer.Typer(help="Fixed-route shuttle reference stack CLI.")
 
 
 @app.command("run-broker")

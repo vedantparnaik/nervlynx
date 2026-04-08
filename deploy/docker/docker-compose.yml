@@ -1,0 +1,8 @@
+services:
+  nervlynx-smoke:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    volumes:
+      - ../../logs:/app/logs
+    command: ["robot-core", "smoke-matrix", "--output-dir", "logs/smoke_matrix"]

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nervlynx"
 version = "0.1.0"
-description = "Reusable robotics runtime core with ADAS reference stack"
+description = "Reusable robotics runtime core with a shuttle reference stack"
 requires-python = ">=3.10"
 dependencies = [
   "pycapnp>=2.0.0",
