@@ -90,7 +90,7 @@ CI executes Python tests, smoke matrix, contracts check, graph run, and C++ buil
 5. Enable trace recording and replay in all test environments.
 6. Export metrics to your monitoring platform.
 
-## Project Scope
+## Project Scope 
 
 NervLynx is a robust runtime foundation, not a complete end-product autonomy system.
 Production deployment decisions (safety, compliance, networking, and hardware integration) should be validated for your operational environment.
