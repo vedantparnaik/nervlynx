@@ -23,8 +23,16 @@ jobs:
         run: robot-core smoke-matrix --output-dir logs/smoke_matrix
       - name: Contracts check
         run: robot-core contracts-check
+      - name: Contracts codegen
+        run: robot-core contracts-codegen
       - name: Graph run
         run: robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
+      - name: Chaos pass
+        run: robot-core chaos-pass --drop-probability 0.1 --mutate-probability 0.1
+      - name: Distributed demo
+        run: robot-core distributed-demo
+      - name: Benchmark pass
+        run: python benchmarks/benchmark_runtime.py
 
   cpp-tests:
     runs-on: ubuntu-latest

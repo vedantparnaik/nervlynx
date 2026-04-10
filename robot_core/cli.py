@@ -6,7 +6,12 @@ from pathlib import Path
 import typer
 
 from robot_core.builtin_plugins import register_builtin_plugins
+from robot_core.checkpoint import CheckpointStore
+from robot_core.chaos import ChaosConfig, run_chaos_pass
+from robot_core.codegen import run_codegen
 from robot_core.contracts import check_contract_migration, default_contracts
+from robot_core.dashboard import serve_dashboard
+from robot_core.distributed import DistributedNodeConfig, DistributedNodeRunner
 from robot_core.examples import build_reference_runtime
 from robot_core.graph import load_graph_config, wire_graph_from_config
 from robot_core.metrics import MetricsRegistry, serve_metrics
@@ -14,9 +19,11 @@ from robot_core.observability import flow_stats, topic_latency_stats
 from robot_core.plugins import PluginRegistry
 from robot_core.recorder import read_jsonl, write_jsonl
 from robot_core.runtime import PipelineRuntime
+from robot_core.security import TopicAccessPolicy, sign_payload
 from robot_core.smoke_matrix import run_smoke_matrix
 from robot_core.smoke_surveillance import run_surveillance_smoke
 from robot_core.supervisor import ManagedNode, RuntimeSupervisor
+from robot_core.transport import InMemoryTransport
 
 app = typer.Typer(help="Generic robotics runtime skeleton CLI.")
 
@@ -158,3 +165,78 @@ def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> No
   trace = runtime.run_once(seed)
   write_jsonl(output, trace)
   typer.echo(f"trace_messages={len(trace)} output={output}")
+
+
+@app.command("dashboard-demo")
+def dashboard_demo(duration_s: float = 5.0, port: int = 9120) -> None:
+  runtime = PipelineRuntime()
+  metrics = MetricsRegistry()
+  server = serve_dashboard(runtime, metrics, port=port)
+  started = time.monotonic()
+  while time.monotonic() - started < duration_s:
+    metrics.inc("nervlynx_dashboard_ticks_total", 1)
+    time.sleep(0.2)
+  server.shutdown()
+  typer.echo(f"dashboard_stopped port={port}")
+
+
+@app.command("chaos-pass")
+def chaos_pass(drop_probability: float = 0.2, mutate_probability: float = 0.2) -> None:
+  runtime = build_reference_runtime()
+  message_count = run_chaos_pass(
+    runtime,
+    seed_topic="sensors.raw",
+    seed_payload={"camera_count": 4, "gps_fix": True},
+    cfg=ChaosConfig(drop_probability=drop_probability, mutate_probability=mutate_probability),
+  )
+  typer.echo(f"chaos_trace_messages={message_count}")
+
+
+@app.command("checkpoint-demo")
+def checkpoint_demo(node_name: str = "planner") -> None:
+  store = CheckpointStore()
+  store.save(node_name, {"mode": "patrol", "last_waypoint": "wp-1", "version": 1})
+  loaded = store.load(node_name) or {}
+  typer.echo(f"checkpoint_loaded={bool(loaded)} fields={','.join(sorted(loaded.keys()))}")
+
+
+@app.command("distributed-demo")
+def distributed_demo() -> None:
+  transport = InMemoryTransport()
+  reg = PluginRegistry()
+  register_builtin_plugins(reg)
+  cfg = DistributedNodeConfig(
+    node_name="perception_worker",
+    plugin_name="perception_node",
+    subscribe_topics=("sensors.bundle",),
+    policy=TopicAccessPolicy(
+      allowed_publish_topics=("perception.scene",),
+      allowed_subscribe_topics=("sensors.bundle",),
+    ),
+    secret="local-dev-secret",
+  )
+  runner = DistributedNodeRunner(transport=transport, registry=reg, config=cfg)
+  received: list[str] = []
+
+  def on_scene(msg):
+    received.append(msg.envelope.topic)
+
+  transport.subscribe("perception.scene", on_scene)
+  runner.start()
+  seed_payload = {"camera_count": 4, "gps_fix": True, "imu_ok": True, "ai_ok": True}
+  signed = dict(seed_payload)
+  signed["_signature"] = sign_payload(seed_payload, "local-dev-secret")
+  seed = PipelineRuntime().publish(
+    topic="sensors.bundle",
+    source="sensor_hub",
+    schema="SensorBundle",
+    payload=signed,
+  )
+  transport.publish(seed)
+  typer.echo(f"distributed_outputs={len(received)} topics={','.join(received)}")
+
+
+@app.command("contracts-codegen")
+def contracts_codegen() -> None:
+  py_path, cpp_path = run_codegen()
+  typer.echo(f"generated_python={py_path} generated_cpp={cpp_path}")

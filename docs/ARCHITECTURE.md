@@ -22,9 +22,16 @@
 5. **Operations**
    - `RuntimeSupervisor`: dependency-aware startup/shutdown ordering.
    - `HealthWatchdog`: stale-node liveness fault detection.
+   - `CheckpointStore`: persistent node state snapshots for recovery.
+   - `ChaosConfig` + chaos runner: controlled fault injection for resilience testing.
    - Metrics endpoint for Prometheus scraping.
+   - Dashboard endpoint for `/health`, `/graph`, and `/stats`.
 
-6. **Debugging**
+6. **Security**
+   - Payload signing and verification via HMAC.
+   - Topic-level access policy checks for publish/subscribe boundaries.
+
+7. **Debugging**
    - JSONL trace recording and replay.
    - Trace timeline, per-topic latency, and end-to-end flow stats.
 

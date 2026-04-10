@@ -7,10 +7,11 @@ It helps teams move from ad-hoc prototype scripts to production-style architectu
 
 - **Structured runtime**: deterministic and async execution modes with priority scheduling
 - **Traceable dataflow**: envelope metadata (`topic`, `source`, `sequence`, `timestamp`, `schema`, `trace_id`)
-- **Operational safety**: watchdog liveness checks, backpressure detection, startup dependency supervision
+- **Operational safety**: watchdog liveness checks, backpressure detection, startup dependency supervision, checkpoint recovery
 - **Extensibility**: plugin SDK, entry-point discovery, and config-driven graph wiring
-- **Observability first**: replayable traces, latency/flow stats, and Prometheus-style metrics
-- **Deployment ready**: Python and C++ runtimes, CI workflows, and deploy profiles
+- **Observability first**: replayable traces, latency/flow stats, Prometheus-style metrics, and runtime dashboard endpoints
+- **Deployment ready**: Python and C++ runtimes, CI workflows, deploy profiles, and edge install/config sync scripts
+- **Security-ready baseline**: payload signing and topic access policy checks
 
 ## Architecture At A Glance
 
@@ -45,13 +46,21 @@ robot-core smoke-matrix --output-dir logs/smoke_matrix
 # Trace and contracts tooling
 robot-core inspect-trace logs/smoke_surveillance_trace.jsonl
 robot-core contracts-check
+robot-core chaos-pass --drop-probability 0.2 --mutate-probability 0.2
 
 # Supervisor and metrics demos
 robot-core supervisor-demo
 robot-core serve-metrics --duration-s 5 --port 9108
+robot-core dashboard-demo --duration-s 5 --port 9120
 
 # Config-driven graph run
 robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
+
+# Distributed node mode over transport (local demo)
+robot-core distributed-demo
+
+# Checkpoint persistence demo
+robot-core checkpoint-demo --node-name planner
 ```
 
 ## C++ Runtime Smoke Test
@@ -67,9 +76,10 @@ ctest --test-dir cpp_core/build --output-on-failure
 
 ```bash
 pytest -q
+python benchmarks/benchmark_runtime.py
 ```
 
-CI executes Python tests, smoke matrix, contracts check, graph run, and C++ build/smoke checks on push and pull requests.
+CI executes Python tests, smoke matrix, contracts checks, graph run, and C++ build/smoke checks on push and pull requests.
 
 ## Repository Layout
 
@@ -78,8 +88,13 @@ CI executes Python tests, smoke matrix, contracts check, graph run, and C++ buil
 - `shuttle/`: reference application stack
 - `tests/`: Python unit and integration smoke tests
 - `deploy/`: deployment profiles (`systemd`, `docker`, config`)
+- `deploy/scripts/`: edge install and config sync scripts
+- `examples/robot_packs/`: reusable robot profile graph configs
+- `benchmarks/`: runtime performance benchmarks
 - `.github/workflows/`: CI pipeline definitions
+- `.github/ISSUE_TEMPLATE/`: bug/feature templates for contributors
 - `docs/`: architecture and design notes
+- `ROADMAP.md`: v0.2 milestones and good-first-issues
 
 ## Extending For Your Robot
 
@@ -89,6 +104,17 @@ CI executes Python tests, smoke matrix, contracts check, graph run, and C++ buil
 4. Set watchdog and supervisor policies for your runtime.
 5. Enable trace recording and replay in all test environments.
 6. Export metrics to your monitoring platform.
+7. Use checkpoints for recovery and run chaos/benchmark passes regularly.
+
+## Deployment Shortcuts
+
+```bash
+# One-command edge install (target defaults to /opt/nervlynx)
+bash deploy/scripts/install_edge.sh
+
+# Sync graph config to a target directory
+python deploy/scripts/sync_config.py deploy/config/graph_surveillance.yaml /tmp/nervlynx-config
+```
 
 ## Project Scope 
 

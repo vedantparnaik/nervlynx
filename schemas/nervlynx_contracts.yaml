@@ -1,0 +1,13 @@
+contracts:
+  - topic: sensors.bundle
+    schema: SensorBundle
+    version: 1
+    required_fields: [camera_count, gps_fix, imu_ok, ai_ok]
+  - topic: perception.scene
+    schema: SceneState
+    version: 1
+    required_fields: [confidence, motion_detected, audio_event, gps_fix]
+  - topic: mission.command
+    schema: MissionCommand
+    version: 1
+    required_fields: [mode, speed_limit_mps, waypoint_id]

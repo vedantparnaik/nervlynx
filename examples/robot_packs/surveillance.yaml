@@ -1,0 +1,13 @@
+name: surveillance_pack
+seed_topic: sensors.bundle
+seed_schema: SensorBundle
+seed_payload:
+  camera_count: 4
+  gps_fix: true
+  imu_ok: true
+  ai_ok: true
+nodes:
+  - plugin: perception_node
+    input_topics: ["sensors.bundle"]
+  - plugin: planner_node
+    input_topics: ["perception.scene"]

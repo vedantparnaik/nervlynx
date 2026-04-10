@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from robot_core.generated_contracts import CONTRACTS
 
 @dataclass(frozen=True)
 class TopicContract:
@@ -74,40 +75,31 @@ def check_contract_migration(old: TopicContract, new: TopicContract) -> list[Con
 
 
 def default_contracts() -> dict[str, TopicContract]:
-  return {
-    "sensors.bundle": TopicContract(
-      topic="sensors.bundle",
-      schema="SensorBundle",
-      version=1,
-      required_fields=("camera_count", "gps_fix", "imu_ok", "ai_ok"),
-      field_types={
-        "camera_count": (int, float),
-        "gps_fix": (bool,),
-        "imu_ok": (bool,),
-        "ai_ok": (bool,),
-      },
-    ),
-    "perception.scene": TopicContract(
-      topic="perception.scene",
-      schema="SceneState",
-      version=1,
-      required_fields=("confidence", "motion_detected", "audio_event", "gps_fix"),
-      field_types={
-        "confidence": (int, float),
-        "motion_detected": (bool,),
-        "audio_event": (bool,),
-        "gps_fix": (bool,),
-      },
-    ),
-    "mission.command": TopicContract(
-      topic="mission.command",
-      schema="MissionCommand",
-      version=1,
-      required_fields=("mode", "speed_limit_mps", "waypoint_id"),
-      field_types={
-        "mode": (str,),
-        "speed_limit_mps": (int, float),
-        "waypoint_id": (str,),
-      },
-    ),
-  }
+  out: dict[str, TopicContract] = {}
+  for c in CONTRACTS:
+    out[c.topic] = TopicContract(
+      topic=c.topic,
+      schema=c.schema,
+      version=c.version,
+      required_fields=c.required_fields,
+    )
+  # Add runtime type hints for known built-ins.
+  if "sensors.bundle" in out:
+    out["sensors.bundle"] = TopicContract(
+      **{**out["sensors.bundle"].__dict__, "field_types": {"camera_count": (int, float), "gps_fix": (bool,), "imu_ok": (bool,), "ai_ok": (bool,)}}
+    )
+  if "perception.scene" in out:
+    out["perception.scene"] = TopicContract(
+      **{
+        **out["perception.scene"].__dict__,
+        "field_types": {"confidence": (int, float), "motion_detected": (bool,), "audio_event": (bool,), "gps_fix": (bool,)},
+      }
+    )
+  if "mission.command" in out:
+    out["mission.command"] = TopicContract(
+      **{
+        **out["mission.command"].__dict__,
+        "field_types": {"mode": (str,), "speed_limit_mps": (int, float), "waypoint_id": (str,)},
+      }
+    )
+  return out

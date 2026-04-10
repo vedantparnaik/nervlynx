@@ -8,3 +8,4 @@ logs/**/*.jsonl
 *.egg-info/
 build/
 cpp_core/build/
+state/checkpoints/

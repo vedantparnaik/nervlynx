@@ -19,6 +19,8 @@ cmake -S cpp_core -B cpp_core/build
 cmake --build cpp_core/build
 ctest --test-dir cpp_core/build --output-on-failure
 python -m robot_core.cli smoke-matrix --output-dir logs/smoke_matrix
+python -m robot_core.cli chaos-pass --drop-probability 0.1 --mutate-probability 0.1
+python benchmarks/benchmark_runtime.py
 ```
 
 ## Contribution guidelines
