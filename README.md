@@ -23,14 +23,32 @@ Primary modules:
 - `robot_core`: reusable runtime primitives and CLI
 - `shuttle`: reference fixed-route stack built on the same patterns
 
-## Quick Start
+## Quick Start (10-Minute Path)
+
+```bash
+make demo
+```
+
+`make demo` creates a local virtualenv, installs dependencies, runs a baseline runtime demo, and replays the produced trace.
+
+If you prefer manual setup:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e ".[dev]"
+robot-core run-example --output logs/robot_core_trace.jsonl
+robot-core replay logs/robot_core_trace.jsonl
 ```
+
+## Quick Start by Persona
+
+- **Robotics engineer**: run + inspect dataflow quickly (`make demo` then `robot-core inspect-trace ...`)
+- **Platform engineer**: bootstrap environment and validate baseline checks (`make setup`, `pytest -q`)
+- **Student / hobbyist**: run the easiest happy-path, then try smoke + replay loops
+
+Detailed paths: `docs/GETTING_STARTED.md`.
 
 ## Common Commands
 
