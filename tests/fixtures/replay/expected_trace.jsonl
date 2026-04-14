@@ -1,0 +1,3 @@
+{"topic":"sensors.raw","source":"sensor_adapter","sequence":1,"monotonic_time_ns":1000,"trace_id":"trace-fixed-001","schema":"RawSensors","payload":{"camera_count":4,"gps_fix":true}}
+{"topic":"perception.state","source":"fusion","sequence":1,"monotonic_time_ns":1000,"trace_id":"trace-fixed-001","schema":"PerceptionState","payload":{"quality":0.9000000000000001,"gps_fix":true}}
+{"topic":"control.intent","source":"planner","sequence":1,"monotonic_time_ns":1000,"trace_id":"trace-fixed-001","schema":"ControlIntent","payload":{"state":"go","target_speed_mps":3.0}}

@@ -1,0 +1,1 @@
+{"topic":"sensors.raw","source":"sensor_adapter","sequence":1,"monotonic_time_ns":1000,"trace_id":"trace-fixed-001","schema":"RawSensors","payload":{"camera_count":4,"gps_fix":true}}

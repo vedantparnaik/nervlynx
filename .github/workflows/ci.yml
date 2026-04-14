@@ -8,11 +8,15 @@ on:
 jobs:
   python-tests:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
       - name: Install
         run: |
           python -m pip install -U pip
@@ -20,19 +24,37 @@ jobs:
       - name: Run tests
         run: pytest -q
       - name: Run smoke matrix
+        if: matrix.python-version == '3.11'
         run: robot-core smoke-matrix --output-dir logs/smoke_matrix
       - name: Contracts check
+        if: matrix.python-version == '3.11'
         run: robot-core contracts-check
       - name: Contracts codegen
+        if: matrix.python-version == '3.11'
         run: robot-core contracts-codegen
       - name: Graph run
+        if: matrix.python-version == '3.11'
         run: robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
       - name: Chaos pass
+        if: matrix.python-version == '3.11'
         run: robot-core chaos-pass --drop-probability 0.1 --mutate-probability 0.1
       - name: Distributed demo
+        if: matrix.python-version == '3.11'
         run: robot-core distributed-demo
-      - name: Benchmark pass
-        run: python benchmarks/benchmark_runtime.py
+      - name: Deterministic replay check
+        if: matrix.python-version == '3.11'
+        run: python benchmarks/check_deterministic_replay.py --seed tests/fixtures/replay/seed_trace.jsonl --expected tests/fixtures/replay/expected_trace.jsonl --output logs/replay_actual_trace.jsonl
+      - name: Benchmark baseline check
+        if: matrix.python-version == '3.11'
+        run: python benchmarks/benchmark_runtime.py --loops 5000 --output-json logs/benchmark_runtime.json --baseline benchmarks/baselines/reference_runtime_v0.2.0.json --max-regression-pct 35
+      - name: Upload production-confidence artifacts
+        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-confidence-${{ github.run_id }}
+          path: |
+            logs/benchmark_runtime.json
+            logs/replay_actual_trace.jsonl
 
   cpp-tests:
     runs-on: ubuntu-latest

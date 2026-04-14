@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from robot_core.runtime import PipelineRuntime, RuntimeMessage
+from robot_core.runtime import Clock, PipelineRuntime, RuntimeMessage
 
 
-def build_reference_runtime() -> PipelineRuntime:
+def build_reference_runtime(clock: Clock | None = None) -> PipelineRuntime:
   """Small, generic Sensor Ingest -> Fusion -> Planning flow."""
-  rt = PipelineRuntime()
+  rt = PipelineRuntime(clock=clock)
 
   def fusion_handler(msg: RuntimeMessage):
     if msg.envelope.topic != "sensors.raw":
