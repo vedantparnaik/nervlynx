@@ -1,7 +1,14 @@
 # NervLynx
 
+[![10-minute demo](https://img.shields.io/badge/quickstart-10--minute%20demo-2ea44f)](#quick-start-10-minute-path)
+[![getting started paths](https://img.shields.io/badge/docs-getting%20started-1f6feb)](docs/GETTING_STARTED.md)
+
 NervLynx is an open, modular robotics runtime framework for building reliable and observable robot pipelines.
 It helps teams move from ad-hoc prototype scripts to production-style architecture with typed contracts, lifecycle control, traceability, and repeatable validation.
+
+## Demo
+
+![NervLynx quickstart terminal demo](docs/assets/nervlynx-demo.gif)
 
 ## Why NervLynx
 
