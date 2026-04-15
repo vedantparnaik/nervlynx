@@ -60,6 +60,7 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 ## Production Confidence
 
 - Compatibility and support tiers: `docs/SUPPORT_MATRIX.md`
+- API compatibility guarantees: `docs/API_STABILITY.md`
 - Release benchmark baselines: `benchmarks/baselines/`
 - Deterministic replay fixture for CI: `tests/fixtures/replay/`
 
