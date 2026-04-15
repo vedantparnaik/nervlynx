@@ -64,6 +64,11 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 - Release benchmark baselines: `benchmarks/baselines/`
 - Deterministic replay fixture for CI: `tests/fixtures/replay/`
 
+## Plugin Ergonomics
+
+- Scaffold a new plugin pack with `nervlynx init <your-pack-name>`
+- Authoring guide: `docs/PLUGIN_AUTHORING.md`
+
 ## Common Commands
 
 ```bash

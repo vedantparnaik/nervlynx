@@ -20,6 +20,7 @@ dev = ["pytest>=8.0.0"]
 [project.scripts]
 shuttle-stack = "shuttle.cli:app"
 robot-core = "robot_core.cli:app"
+nervlynx = "robot_core.nervlynx_cli:app"
 
 [project.entry-points."nervlynx.sensors"]
 synthetic_surveillance_sensor = "robot_core.builtin_plugins:SyntheticSensorPlugin"
