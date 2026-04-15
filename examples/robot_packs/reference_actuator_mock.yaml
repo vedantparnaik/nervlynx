@@ -1,0 +1,10 @@
+name: reference_actuator_mock_pack
+seed_topic: mission.command
+seed_schema: MissionCommand
+seed_payload:
+  mode: go
+  speed_limit_mps: 1.0
+  reason: manual_test
+nodes:
+  - plugin: actuator_mock_node
+    input_topics: ["mission.command"]

@@ -1,0 +1,11 @@
+name: reference_planner_stub_pack
+seed_topic: perception.scene
+seed_schema: SceneState
+seed_payload:
+  confidence: 0.9
+  gps_fix: true
+nodes:
+  - plugin: planner_stub_node
+    input_topics: ["perception.scene"]
+  - plugin: actuator_mock_node
+    input_topics: ["mission.command"]

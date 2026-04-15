@@ -11,6 +11,7 @@ from robot_core.graph import load_graph_config, wire_graph_from_config
 from robot_core.metrics import MetricsRegistry, serve_metrics
 from robot_core.observability import flow_stats, structured_event, timeline_by_trace, topic_latency_stats
 from robot_core.plugins import PluginRegistry
+from robot_core.reference_plugins import register_reference_plugins
 from robot_core.runtime import AsyncPipelineRuntime, Envelope, PipelineRuntime, RuntimeMessage, SimulatedClock, SystemClock
 from robot_core.security import TopicAccessPolicy, sign_payload, verify_payload_signature
 from robot_core.smoke_matrix import run_smoke_matrix
@@ -29,6 +30,7 @@ __all__ = [
   "HealthWatchdog",
   "PluginRegistry",
   "register_builtin_plugins",
+  "register_reference_plugins",
   "CheckpointStore",
   "ChaosConfig",
   "run_chaos_pass",

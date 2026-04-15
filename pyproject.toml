@@ -24,10 +24,13 @@ nervlynx = "robot_core.nervlynx_cli:app"
 
 [project.entry-points."nervlynx.sensors"]
 synthetic_surveillance_sensor = "robot_core.builtin_plugins:SyntheticSensorPlugin"
+camera_ingest_sensor = "robot_core.reference_plugins:CameraIngestSensorPlugin"
 
 [project.entry-points."nervlynx.nodes"]
 perception_node = "robot_core.builtin_plugins:PerceptionNodePlugin"
 planner_node = "robot_core.builtin_plugins:PlannerNodePlugin"
+planner_stub_node = "robot_core.reference_plugins:PlannerStubNodePlugin"
+actuator_mock_node = "robot_core.reference_plugins:ActuatorMockNodePlugin"
 
 [tool.setuptools]
 package-dir = {"" = "."}

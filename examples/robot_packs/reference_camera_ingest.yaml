@@ -1,0 +1,16 @@
+name: reference_camera_ingest_pack
+seed_topic: sensors.bundle
+seed_schema: SensorBundle
+seed_payload:
+  camera_count: 6
+  gps_fix: true
+  imu_ok: true
+  ai_ok: true
+  frame_rate_hz: 20
+nodes:
+  - plugin: perception_node
+    input_topics: ["sensors.bundle"]
+  - plugin: planner_stub_node
+    input_topics: ["perception.scene"]
+  - plugin: actuator_mock_node
+    input_topics: ["mission.command"]

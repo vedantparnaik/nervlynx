@@ -24,3 +24,11 @@ pytest -q
 2. Add contract-aware payload fields for your robot stack.
 3. Register additional node plugins under `nervlynx.nodes`.
 4. Validate with `robot-core plugin-catalog` and `robot-core run-graph`.
+
+## Built-in Reference Packs
+
+Use these example graph packs to start faster:
+
+- `examples/robot_packs/reference_camera_ingest.yaml`
+- `examples/robot_packs/reference_planner_stub.yaml`
+- `examples/robot_packs/reference_actuator_mock.yaml`

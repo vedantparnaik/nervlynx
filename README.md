@@ -68,6 +68,7 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 
 - Scaffold a new plugin pack with `nervlynx init <your-pack-name>`
 - Authoring guide: `docs/PLUGIN_AUTHORING.md`
+- Reference graph packs: `examples/robot_packs/reference_*.yaml`
 
 ## Common Commands
 
