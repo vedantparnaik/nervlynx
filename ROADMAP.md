@@ -6,6 +6,14 @@
 - Strengthen schema governance across Python and C++ implementations.
 - Improve observability, resilience, and security posture for real deployments.
 
+## Quarterly focus (2026)
+
+| Quarter | Focus |
+| --- | --- |
+| **Q2** | Release automation, changelog discipline, contributor onboarding (`docs/COMMUNITY.md`). |
+| **Q3** | Transport hardening, persistent queues, cross-process tests. |
+| **Q4** | IDL-first contracts, compatibility reports in CI, richer validation. |
+
 ## Milestones
 
 ### M1 - Runtime and Transport Hardening
@@ -24,11 +32,13 @@
 - [ ] Add chaos scenarios for node crash/restart loops.
 
 ### M4 - Developer Experience
-- [ ] Publish getting-started tutorial with one robot pack.
-- [ ] Add benchmark trend reporting in CI.
-- [ ] Add package release workflow and changelog automation.
+- [x] Publish getting-started tutorial with one robot pack (`docs/GETTING_STARTED.md`, `make demo`).
+- [x] Add benchmark trend reporting in CI (baseline + artifacts).
+- [x] Add package release workflow and changelog automation (`docs/RELEASE_PROCESS.md`, `.github/workflows/release.yml`).
 
-## Good First Issues
+## Good first issues
+
+Issues tagged **`good first issue`** and **`help wanted`** are curated for newcomers. Ideas if none are open:
 
 1. Add one new built-in node plugin and tests.
 2. Add a new chaos scenario to `robot_core/chaos.py`.

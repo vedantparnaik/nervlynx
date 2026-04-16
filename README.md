@@ -65,6 +65,13 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 - Deterministic replay fixture for CI: `tests/fixtures/replay/`
 - Deprecation and versioning policy: `docs/DEPRECATION_POLICY.md`
 - Release history: `CHANGELOG.md`
+- How we ship versions: `docs/RELEASE_PROCESS.md`
+
+## Contributing
+
+- Contributor guide: `CONTRIBUTING.md`
+- Labels and quarterly themes: `docs/COMMUNITY.md`
+- Roadmap and milestones: `ROADMAP.md`
 
 ## Plugin Ergonomics
 

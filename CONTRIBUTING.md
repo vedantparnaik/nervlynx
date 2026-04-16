@@ -41,3 +41,7 @@ python benchmarks/benchmark_runtime.py
 - Every user-visible change should have an entry under `[Unreleased]` in `CHANGELOG.md` (or the maintainer adds it when merging).
 - Version bumps and release tagging follow `docs/RELEASE_PROCESS.md`.
 - Pushing a tag matching `v*.*.*` triggers the GitHub Release workflow and attaches built wheels and sdists.
+
+## Labels and good first issues
+
+- See `docs/COMMUNITY.md` for recommended labels, quarterly themes, and how to pick up **good first issue** work.

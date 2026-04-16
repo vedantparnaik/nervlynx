@@ -1,0 +1,32 @@
+name: Good first issue proposal
+description: Propose a small task suitable for new contributors (or claim an idea).
+title: "[good-first-issue] "
+labels: ["good first issue", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for **small, well-scoped** work (docs, tests, one module).
+        Maintainers may split or relabel after triage.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should a contributor do in one PR?
+    validations:
+      required: true
+
+  - type: textarea
+    id: hints
+    attributes:
+      label: Hints (optional)
+      description: Files, commands, or docs to read first.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This fits in roughly one focused PR (under ~300 lines of diff ideally).
+          required: true
