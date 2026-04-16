@@ -35,3 +35,9 @@ python benchmarks/benchmark_runtime.py
 - Use clear titles and describe motivation.
 - Include a brief test plan and results.
 - Link issues when applicable.
+
+## Releases and changelog
+
+- Every user-visible change should have an entry under `[Unreleased]` in `CHANGELOG.md` (or the maintainer adds it when merging).
+- Version bumps and release tagging follow `docs/RELEASE_PROCESS.md`.
+- Pushing a tag matching `v*.*.*` triggers the GitHub Release workflow and attaches built wheels and sdists.
