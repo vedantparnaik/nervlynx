@@ -63,6 +63,8 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 - API compatibility guarantees: `docs/API_STABILITY.md`
 - Release benchmark baselines: `benchmarks/baselines/`
 - Deterministic replay fixture for CI: `tests/fixtures/replay/`
+- Deprecation and versioning policy: `docs/DEPRECATION_POLICY.md`
+- Release history: `CHANGELOG.md`
 
 ## Plugin Ergonomics
 

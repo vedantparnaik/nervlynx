@@ -6,7 +6,7 @@ NervLynx exposes a **minimal stable API surface** for users building integration
 
 - Imports from `robot_core.stable_api` will remain backwards compatible within the v0.x line.
 - Symbols may be added, but existing symbol names and behavior contracts are preserved unless a security or correctness issue requires urgent change.
-- If a breaking change is unavoidable, it will be documented in `README.md` and release notes with a migration note.
+- If a breaking change is unavoidable, it will be documented in `README.md`, `CHANGELOG.md`, and release notes with a migration note. See also `docs/DEPRECATION_POLICY.md`.
 
 ## Stable Surface
 
