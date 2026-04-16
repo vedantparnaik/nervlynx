@@ -66,6 +66,8 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 - Deprecation and versioning policy: `docs/DEPRECATION_POLICY.md`
 - Release history: `CHANGELOG.md`
 - How we ship versions: `docs/RELEASE_PROCESS.md`
+- Security reporting and supported versions: `SECURITY.md`
+- Trust boundaries (baseline): `docs/THREAT_MODEL.md`
 
 ## Contributing
 
