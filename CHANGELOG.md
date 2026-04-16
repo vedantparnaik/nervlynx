@@ -9,7 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Planned: follow-up items from `ROADMAP.md`.
+- Release automation: tag-triggered GitHub Release workflow with wheel and sdist artifacts.
+- Governance docs: release process, community labels and quarterly themes, deprecation policy.
+- Security: `SECURITY.md`, baseline `docs/THREAT_MODEL.md`, CycloneDX SBOM CI workflow and artifacts.
+- Issue template for proposing **good first issue** work.
+
+### Changed
+
+- `ROADMAP.md` M4 developer-experience milestones marked complete where shipped.
 
 ## [0.2.0] - 2026-04-15
 
