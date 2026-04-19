@@ -4,6 +4,8 @@
 
 Maintainers use these labels to route work. When opening an issue, pick the closest fit; we may relabel.
 
+Canonical definitions live in [`.github/labels.yml`](../.github/labels.yml). Pushing changes to that file on `main` runs the **sync-labels** workflow so the repository labels stay aligned with this table.
+
 | Label | Meaning |
 | --- | --- |
 | `good first issue` | Small, bounded tasks ideal for first-time contributors. |

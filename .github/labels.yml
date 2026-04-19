@@ -1,0 +1,34 @@
+# Declarative repository labels (synced by .github/workflows/sync-labels.yml).
+# Edit this file and merge to main to update labels on GitHub.
+
+- name: bug
+  color: "d73a4a"
+  description: Incorrect or unexpected behavior
+
+- name: enhancement
+  color: "a2eeef"
+  description: New feature or meaningful improvement
+
+- name: documentation
+  color: "0075ca"
+  description: README, guides, or API docs
+
+- name: good first issue
+  color: "7057ff"
+  description: Small, bounded tasks ideal for first-time contributors
+
+- name: help wanted
+  color: "008672"
+  description: Maintainer-approved; community contributions welcome
+
+- name: runtime
+  color: "5319e7"
+  description: robot_core execution, scheduling, transport
+
+- name: ci
+  color: "f9d0c4"
+  description: Workflows, baselines, or automation
+
+- name: security
+  color: "ee0701"
+  description: Vulnerability, hardening, or trust-boundary work
