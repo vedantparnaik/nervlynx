@@ -49,7 +49,7 @@ jobs:
         run: python benchmarks/benchmark_runtime.py --loops 5000 --output-json logs/benchmark_runtime.json --baseline benchmarks/baselines/reference_runtime_v0.2.0.json --max-regression-pct 35
       - name: Upload production-confidence artifacts
         if: matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: production-confidence-${{ github.run_id }}
           path: |
