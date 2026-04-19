@@ -13,8 +13,8 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install
@@ -49,7 +49,7 @@ jobs:
         run: python benchmarks/benchmark_runtime.py --loops 5000 --output-json logs/benchmark_runtime.json --baseline benchmarks/baselines/reference_runtime_v0.2.0.json --max-regression-pct 35
       - name: Upload production-confidence artifacts
         if: matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: production-confidence-${{ github.run_id }}
           path: |
@@ -59,7 +59,7 @@ jobs:
   cpp-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Configure
         run: cmake -S cpp_core -B cpp_core/build
       - name: Build
