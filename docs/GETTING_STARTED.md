@@ -45,3 +45,9 @@ What you get:
 - A first successful run with minimal setup.
 - A second smoke scenario to explore behavior changes.
 - Replay confidence before trying your own plugins/configs.
+
+## See also
+
+- Plugin scaffolding and reference packs: `docs/PLUGIN_AUTHORING.md`
+- Labels and contributor onboarding: `docs/COMMUNITY.md`
+- Full command reference: `README.md` (Common Commands)
