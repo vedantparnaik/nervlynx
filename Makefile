@@ -1,8 +1,9 @@
-.PHONY: help demo setup run-example replay clean-venv
+.PHONY: help demo setup test run-example replay clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
 PIP := $(VENV_DIR)/bin/pip
+PYTEST := $(VENV_DIR)/bin/pytest
 ROBOT_CORE := $(VENV_DIR)/bin/robot-core
 
 help:
@@ -11,11 +12,16 @@ help:
 	@echo "Targets:"
 	@echo "  make demo       Create venv, install deps, run demo + replay"
 	@echo "  make setup      Create venv and install project in dev mode"
+	@echo "  make test       Run pytest (implies setup if venv missing)"
 	@echo "  make run-example Run the basic runtime demo"
 	@echo "  make replay     Replay the latest demo trace"
 	@echo "  make clean-venv Remove local virtual environment"
 
 demo: setup run-example replay
+
+test:
+	@if [ ! -x "$(PYTEST)" ]; then $(MAKE) setup; fi
+	$(PYTEST) -q
 
 setup:
 	$(PYTHON) -m venv $(VENV_DIR)
