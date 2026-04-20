@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Governance docs: release process, community labels and quarterly themes, deprecation policy.
 - Security: `SECURITY.md`, baseline `docs/THREAT_MODEL.md`, CycloneDX SBOM CI workflow and artifacts.
 - Issue template for proposing **good first issue** work.
+- `make test` Makefile target for pytest via the project virtualenv.
+- `.editorconfig` for shared indentation and newline defaults.
 
 ### Changed
 
 - `ROADMAP.md` M4 developer-experience milestones marked complete where shipped.
+- `CONTRIBUTING.md` local checks use `make test` and `robot-core` entry points; `docs/GETTING_STARTED.md` cross-links related docs.
 
 ## [0.2.0] - 2026-04-15
 
