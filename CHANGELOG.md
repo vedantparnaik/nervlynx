@@ -15,11 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Issue template for proposing **good first issue** work.
 - `make test` Makefile target for pytest via the project virtualenv.
 - `.editorconfig` for shared indentation and newline defaults.
+- `robot-core version` CLI command and `make cpp-smoke` for the C++ smoke binary.
+- `docs/DEVELOPMENT.md` quick reference for Python and C++ local workflows.
 
 ### Changed
 
 - `ROADMAP.md` M4 developer-experience milestones marked complete where shipped.
 - `CONTRIBUTING.md` local checks use `make test` and `robot-core` entry points; `docs/GETTING_STARTED.md` cross-links related docs.
+- `README.md` shows a main-branch CI status badge and links `docs/DEVELOPMENT.md`.
 
 ## [0.2.0] - 2026-04-15
 
