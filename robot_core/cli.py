@@ -240,3 +240,14 @@ def distributed_demo() -> None:
 def contracts_codegen() -> None:
   py_path, cpp_path = run_codegen()
   typer.echo(f"generated_python={py_path} generated_cpp={cpp_path}")
+
+
+@app.command("version")
+def version_cmd() -> None:
+  """Print the installed nervlynx package version."""
+  from importlib.metadata import PackageNotFoundError, version
+
+  try:
+    typer.echo(version("nervlynx"))
+  except PackageNotFoundError:
+    typer.echo("nervlynx-unknown")
