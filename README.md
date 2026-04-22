@@ -2,6 +2,7 @@
 
 [![10-minute demo](https://img.shields.io/badge/quickstart-10--minute%20demo-2ea44f)](#quick-start-10-minute-path)
 [![getting started paths](https://img.shields.io/badge/docs-getting%20started-1f6feb)](docs/GETTING_STARTED.md)
+[![ci](https://github.com/vedantparnaik/nervlynx/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vedantparnaik/nervlynx/actions/workflows/ci.yml)
 
 NervLynx is an open, modular robotics runtime framework for building reliable and observable robot pipelines.
 It helps teams move from ad-hoc prototype scripts to production-style architecture with typed contracts, lifecycle control, traceability, and repeatable validation.
@@ -72,6 +73,7 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 ## Contributing
 
 - Contributor guide: `CONTRIBUTING.md`
+- Day-to-day dev shortcuts: `docs/DEVELOPMENT.md`
 - Labels and quarterly themes: `docs/COMMUNITY.md`
 - Roadmap and milestones: `ROADMAP.md`
 
