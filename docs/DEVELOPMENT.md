@@ -8,6 +8,7 @@ Shortcuts for day-to-day work on NervLynx. For full policy and PR expectations s
 make setup    # once: venv + editable install
 make test     # pytest
 make demo     # install, run-example, replay
+make graph-example  # run-graph on examples/robot_packs/surveillance.yaml
 robot-core version
 ```
 
