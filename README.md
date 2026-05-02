@@ -82,10 +82,14 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 - Scaffold a new plugin pack with `nervlynx init <your-pack-name>`
 - Authoring guide: `docs/PLUGIN_AUTHORING.md`
 - Reference graph packs: `examples/robot_packs/reference_*.yaml`
+- Pack index and one-liners: `examples/robot_packs/README.md`
 
 ## Common Commands
 
 ```bash
+# Installed package version
+robot-core version
+
 # Basic runtime demo
 robot-core run-example --output logs/robot_core_trace.jsonl
 robot-core replay logs/robot_core_trace.jsonl
