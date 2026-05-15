@@ -171,6 +171,8 @@ bash deploy/scripts/install_edge.sh
 python deploy/scripts/sync_config.py deploy/config/graph_surveillance.yaml /tmp/nervlynx-config
 ```
 
+Deploy layout reference: `deploy/README.md`.
+
 ## Project Scope 
 
 NervLynx is a robust runtime foundation, not a complete end-product autonomy system.
