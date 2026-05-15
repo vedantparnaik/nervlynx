@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/DEVELOPMENT.md` quick reference for Python and C++ local workflows.
 - `examples/robot_packs/README.md` index for graph YAML packs.
 - `make graph-example` runs `examples/robot_packs/surveillance.yaml` into `logs/graph_example_trace.jsonl`.
+- `deploy/README.md` overview for config, docker, systemd, and scripts.
+- `make compile` byte-compiles `robot_core` and `shuttle`; `tests/test_bytecompile.py` guards syntax in CI.
 
 ### Changed
 
@@ -26,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CONTRIBUTING.md` local checks use `make test` and `robot-core` entry points; `docs/GETTING_STARTED.md` cross-links related docs.
 - `README.md` shows a main-branch CI status badge and links `docs/DEVELOPMENT.md`; Common Commands lists `robot-core version` and the robot packs README.
 - `CONTRIBUTING.md` mentions optional `make graph-example`.
+- `docs/ARCHITECTURE.md` links threat model, development, and release documentation.
+- `docs/DEVELOPMENT.md` documents `make compile` for quick syntax checks without pytest.
 
 ## [0.2.0] - 2026-04-15
 
