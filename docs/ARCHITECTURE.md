@@ -35,6 +35,12 @@
    - JSONL trace recording and replay.
    - Trace timeline, per-topic latency, and end-to-end flow stats.
 
+## Related documentation
+
+- Trust boundaries and deployment scope: `docs/THREAT_MODEL.md`
+- Contributor and local workflows: `docs/DEVELOPMENT.md`
+- Release tagging and artifacts: `docs/RELEASE_PROCESS.md`
+
 ## Dataflow model
 
 ```
