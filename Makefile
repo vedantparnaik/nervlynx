@@ -1,4 +1,4 @@
-.PHONY: help demo setup test cpp-smoke graph-example run-example replay clean-venv
+.PHONY: help demo setup test compile cpp-smoke graph-example run-example replay clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -13,6 +13,7 @@ help:
 	@echo "  make demo       Create venv, install deps, run demo + replay"
 	@echo "  make setup      Create venv and install project in dev mode"
 	@echo "  make test       Run pytest (implies setup if venv missing)"
+	@echo "  make compile    Byte-compile robot_core and shuttle (syntax check)"
 	@echo "  make cpp-smoke  Configure, build, and run C++ smoke_surveillance"
 	@echo "  make graph-example Run surveillance example graph (implies setup if venv missing)"
 	@echo "  make run-example Run the basic runtime demo"
@@ -24,6 +25,9 @@ demo: setup run-example replay
 test:
 	@if [ ! -x "$(PYTEST)" ]; then $(MAKE) setup; fi
 	$(PYTEST) -q
+
+compile:
+	$(PYTHON) -m compileall -q robot_core shuttle
 
 cpp-smoke:
 	cmake -S cpp_core -B cpp_core/build
