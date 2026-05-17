@@ -7,6 +7,7 @@ Shortcuts for day-to-day work on NervLynx. For full policy and PR expectations s
 ```bash
 make setup    # once: venv + editable install
 make test     # pytest
+make check    # test + compile (handy before push)
 make demo     # install, run-example, replay
 make compile  # quick syntax check without pytest
 make graph-example  # run-graph on examples/robot_packs/surveillance.yaml
@@ -27,3 +28,4 @@ ctest --test-dir cpp_core/build --output-on-failure
 - Core runtime and CLI: `robot_core/`
 - Graph examples: `examples/robot_packs/`, `deploy/config/`
 - CI workflows: `.github/workflows/`
+- Benchmarks and replay checks: `benchmarks/README.md`
