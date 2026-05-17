@@ -16,7 +16,8 @@ pip install -e ".[dev]"
 With a virtualenv active (`pip install -e ".[dev]"`):
 
 ```bash
-make test
+make check
+# or: make test && make compile
 # or: pytest -q
 cmake -S cpp_core -B cpp_core/build
 cmake --build cpp_core/build
