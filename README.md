@@ -64,6 +64,7 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 - API compatibility guarantees: `docs/API_STABILITY.md`
 - Release benchmark baselines: `benchmarks/baselines/`
 - Deterministic replay fixture for CI: `tests/fixtures/replay/`
+- Benchmark scripts and baselines: `benchmarks/README.md`
 - Deprecation and versioning policy: `docs/DEPRECATION_POLICY.md`
 - Release history: `CHANGELOG.md`
 - How we ship versions: `docs/RELEASE_PROCESS.md`
@@ -73,6 +74,7 @@ Detailed paths: `docs/GETTING_STARTED.md`.
 ## Contributing
 
 - Contributor guide: `CONTRIBUTING.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
 - Day-to-day dev shortcuts: `docs/DEVELOPMENT.md`
 - Labels and quarterly themes: `docs/COMMUNITY.md`
 - Roadmap and milestones: `ROADMAP.md`
