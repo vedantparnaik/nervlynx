@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make graph-example` runs `examples/robot_packs/surveillance.yaml` into `logs/graph_example_trace.jsonl`.
 - `deploy/README.md` overview for config, docker, systemd, and scripts.
 - `make compile` byte-compiles `robot_core` and `shuttle`; `tests/test_bytecompile.py` guards syntax in CI.
+- `benchmarks/README.md` index for runtime benchmark and deterministic replay tooling.
+- `make check` runs `make test` and `make compile` as a pre-push gate.
+- `tests/test_example_graph_packs.py` covers `examples/robot_packs/surveillance.yaml` wiring.
+- `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
 
 ### Changed
 
@@ -30,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CONTRIBUTING.md` mentions optional `make graph-example`.
 - `docs/ARCHITECTURE.md` links threat model, development, and release documentation.
 - `docs/DEVELOPMENT.md` documents `make compile` for quick syntax checks without pytest.
+- `docs/DEVELOPMENT.md` documents `make check` and links `benchmarks/README.md`.
+- `CONTRIBUTING.md` recommends `make check` for local validation.
+- `README.md` links code of conduct and benchmarks documentation.
 
 ## [0.2.0] - 2026-04-15
 
