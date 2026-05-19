@@ -29,7 +29,7 @@ Sensor Ingest -> Perception/Fusion -> Planning -> Actuation -> Uplink/Alerts
 
 Primary modules:
 - `robot_core`: reusable runtime primitives and CLI
-- `shuttle`: reference fixed-route stack built on the same patterns
+- `shuttle`: reference fixed-route stack built on the same patterns (`shuttle/README.md`)
 
 ## Quick Start (10-Minute Path)
 
@@ -56,7 +56,7 @@ robot-core replay logs/robot_core_trace.jsonl
 - **Platform engineer**: bootstrap environment and validate baseline checks (`make setup`, `pytest -q`)
 - **Student / hobbyist**: run the easiest happy-path, then try smoke + replay loops
 
-Detailed paths: `docs/GETTING_STARTED.md`.
+Detailed paths: `docs/GETTING_STARTED.md`. Full doc index: `docs/README.md`.
 
 ## Production Confidence
 
