@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `schemas/README.md` and `shuttle/README.md` module overviews.
 - `make replay-check` and `make clean-logs` Makefile targets.
 - `nervlynx version` reads package version from metadata; `tests/test_nervlynx_cli_version.py`.
+- Graph config validation: `validate_graph_config()`, `robot-core graph-validate`, and `make graph-validate`.
+- `tests/test_graph_validation.py` validates structure and plugin existence for graph configs.
 
 ### Changed
 
@@ -43,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `README.md` links code of conduct and benchmarks documentation.
 - `README.md` links `docs/README.md` and `shuttle/README.md`.
 - `docs/DEVELOPMENT.md` documents `make replay-check`.
+- `README.md` and `CONTRIBUTING.md` include graph validation commands.
 
 ## [0.2.0] - 2026-04-15
 
