@@ -1,10 +1,12 @@
-.PHONY: help demo setup test compile check cpp-smoke graph-example run-example replay clean-venv
+.PHONY: help demo setup test compile check replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
 PIP := $(VENV_DIR)/bin/pip
 PYTEST := $(VENV_DIR)/bin/pytest
 ROBOT_CORE := $(VENV_DIR)/bin/robot-core
+# Prefer venv interpreter when present so scripts can import robot_core.
+RUN_PYTHON := $(if $(wildcard $(VENV_DIR)/bin/python),$(VENV_DIR)/bin/python,$(PYTHON))
 
 help:
 	@echo "NervLynx developer shortcuts"
@@ -14,6 +16,7 @@ help:
 	@echo "  make setup      Create venv and install project in dev mode"
 	@echo "  make test       Run pytest (implies setup if venv missing)"
 	@echo "  make check      Run test + compile (common pre-push gate)"
+	@echo "  make replay-check Run deterministic replay fixture check"
 	@echo "  make compile    Byte-compile robot_core and shuttle (syntax check)"
 	@echo "  make cpp-smoke  Configure, build, and run C++ smoke_surveillance"
 	@echo "  make graph-example Run surveillance example graph (implies setup if venv missing)"
@@ -31,6 +34,13 @@ compile:
 	$(PYTHON) -m compileall -q robot_core shuttle
 
 check: test compile
+
+replay-check:
+	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then $(MAKE) setup; fi
+	$(RUN_PYTHON) benchmarks/check_deterministic_replay.py \
+	  --seed tests/fixtures/replay/seed_trace.jsonl \
+	  --expected tests/fixtures/replay/expected_trace.jsonl \
+	  --output logs/replay_actual_trace.jsonl
 
 cpp-smoke:
 	cmake -S cpp_core -B cpp_core/build
@@ -53,6 +63,9 @@ run-example:
 
 replay:
 	$(ROBOT_CORE) replay logs/robot_core_trace.jsonl
+
+clean-logs:
+	rm -f logs/*.jsonl logs/**/*.jsonl 2>/dev/null || true
 
 clean-venv:
 	rm -rf $(VENV_DIR)
