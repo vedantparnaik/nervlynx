@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make check` runs `make test` and `make compile` as a pre-push gate.
 - `tests/test_example_graph_packs.py` covers `examples/robot_packs/surveillance.yaml` wiring.
 - `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
+- `docs/README.md` documentation index for all guides.
+- `schemas/README.md` and `shuttle/README.md` module overviews.
+- `make replay-check` and `make clean-logs` Makefile targets.
+- `nervlynx version` reads package version from metadata; `tests/test_nervlynx_cli_version.py`.
 
 ### Changed
 
@@ -37,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/DEVELOPMENT.md` documents `make check` and links `benchmarks/README.md`.
 - `CONTRIBUTING.md` recommends `make check` for local validation.
 - `README.md` links code of conduct and benchmarks documentation.
+- `README.md` links `docs/README.md` and `shuttle/README.md`.
+- `docs/DEVELOPMENT.md` documents `make replay-check`.
 
 ## [0.2.0] - 2026-04-15
 
