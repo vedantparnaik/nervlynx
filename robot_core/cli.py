@@ -13,7 +13,7 @@ from robot_core.contracts import check_contract_migration, default_contracts
 from robot_core.dashboard import serve_dashboard
 from robot_core.distributed import DistributedNodeConfig, DistributedNodeRunner
 from robot_core.examples import build_reference_runtime
-from robot_core.graph import load_graph_config, wire_graph_from_config
+from robot_core.graph import load_graph_config, validate_graph_config, wire_graph_from_config
 from robot_core.metrics import MetricsRegistry, serve_metrics
 from robot_core.observability import flow_stats, topic_latency_stats
 from robot_core.plugins import PluginRegistry
@@ -155,6 +155,11 @@ def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> No
     register_builtin_plugins(reg)
   runtime = PipelineRuntime(topic_priority={"safety.event": 1})
   cfg = load_graph_config(config)
+  issues = validate_graph_config(cfg, registry=reg)
+  if issues:
+    for issue in issues:
+      typer.echo(f"config_error: {issue}")
+    raise typer.Exit(code=1)
   wire_graph_from_config(runtime, reg, cfg)
   seed = runtime.publish(
     topic=str(cfg.get("seed_topic", "sensors.bundle")),
@@ -165,6 +170,21 @@ def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> No
   trace = runtime.run_once(seed)
   write_jsonl(output, trace)
   typer.echo(f"trace_messages={len(trace)} output={output}")
+
+
+@app.command("graph-validate")
+def graph_validate(config: Path) -> None:
+  reg = PluginRegistry()
+  reg.discover_entrypoints()
+  if not reg.catalog().nodes and not reg.catalog().sensors:
+    register_builtin_plugins(reg)
+  cfg = load_graph_config(config)
+  issues = validate_graph_config(cfg, registry=reg)
+  if issues:
+    for issue in issues:
+      typer.echo(f"config_error: {issue}")
+    raise typer.Exit(code=1)
+  typer.echo("graph_config_valid=true")
 
 
 @app.command("dashboard-demo")
