@@ -27,6 +27,7 @@ robot-core chaos-pass --drop-probability 0.1 --mutate-probability 0.1
 python benchmarks/benchmark_runtime.py
 make graph-example   # optional: example graph via surveillance pack
 make compile         # optional: byte-compile robot_core and shuttle
+make graph-validate  # optional: validate surveillance graph config + plugins
 ```
 
 Scaffold a new plugin pack: `nervlynx init <name>` (see `docs/PLUGIN_AUTHORING.md`).

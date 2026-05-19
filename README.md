@@ -111,6 +111,7 @@ robot-core serve-metrics --duration-s 5 --port 9108
 robot-core dashboard-demo --duration-s 5 --port 9120
 
 # Config-driven graph run
+robot-core graph-validate deploy/config/graph_surveillance.yaml
 robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
 
 # Distributed node mode over transport (local demo)
