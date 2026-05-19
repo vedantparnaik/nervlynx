@@ -190,8 +190,13 @@ def test_nodes_produce_expected_topics() -> None:
 
 @app.command("version")
 def version() -> None:
-  """Print nervlynx CLI version."""
-  typer.echo("nervlynx-cli 0.1")
+  """Print the installed nervlynx package version."""
+  from importlib.metadata import PackageNotFoundError, version as pkg_version
+
+  try:
+    typer.echo(pkg_version("nervlynx"))
+  except PackageNotFoundError:
+    typer.echo("nervlynx-unknown")
 
 
 if __name__ == "__main__":
