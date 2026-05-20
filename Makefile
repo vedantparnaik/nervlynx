@@ -1,4 +1,4 @@
-.PHONY: help demo setup test compile check graph-validate replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
+.PHONY: help demo setup test compile check preflight graph-validate replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -16,6 +16,7 @@ help:
 	@echo "  make setup      Create venv and install project in dev mode"
 	@echo "  make test       Run pytest (implies setup if venv missing)"
 	@echo "  make check      Run test + compile (common pre-push gate)"
+	@echo "  make preflight  Run graph-validate + replay-check + check"
 	@echo "  make graph-validate Validate surveillance graph config and plugins"
 	@echo "  make replay-check Run deterministic replay fixture check"
 	@echo "  make compile    Byte-compile robot_core and shuttle (syntax check)"
@@ -35,6 +36,8 @@ compile:
 	$(PYTHON) -m compileall -q robot_core shuttle
 
 check: test compile
+
+preflight: graph-validate replay-check check
 
 graph-validate:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
