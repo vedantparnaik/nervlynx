@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nervlynx version` reads package version from metadata; `tests/test_nervlynx_cli_version.py`.
 - Graph config validation: `validate_graph_config()`, `robot-core graph-validate`, and `make graph-validate`.
 - `tests/test_graph_validation.py` validates structure and plugin existence for graph configs.
+- Invalid graph fixture and CLI coverage for failure paths (`tests/fixtures/graph/invalid_missing_nodes.yaml`).
+- `make preflight` bundles graph validation, replay check, and local checks.
 
 ### Changed
 
@@ -46,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `README.md` links `docs/README.md` and `shuttle/README.md`.
 - `docs/DEVELOPMENT.md` documents `make replay-check`.
 - `README.md` and `CONTRIBUTING.md` include graph validation commands.
+- `docs/DEVELOPMENT.md` and `CONTRIBUTING.md` include the `make preflight` flow.
 
 ## [0.2.0] - 2026-04-15
 
