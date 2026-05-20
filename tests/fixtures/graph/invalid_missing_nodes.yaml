@@ -1,0 +1,6 @@
+name: invalid_graph_no_nodes
+seed_topic: sensors.bundle
+seed_schema: SensorBundle
+seed_payload:
+  camera_count: 2
+  gps_fix: true

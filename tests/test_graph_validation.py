@@ -22,3 +22,11 @@ def test_graph_validation_reports_missing_plugin() -> None:
   }
   issues = validate_graph_config(cfg, registry=reg)
   assert any("plugin not found in registry" in issue for issue in issues)
+
+
+def test_graph_validation_reports_missing_nodes_list() -> None:
+  reg = PluginRegistry()
+  register_builtin_plugins(reg)
+  cfg = load_graph_config(Path("tests/fixtures/graph/invalid_missing_nodes.yaml"))
+  issues = validate_graph_config(cfg, registry=reg)
+  assert "nodes must be a non-empty list" in issues
