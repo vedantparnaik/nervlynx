@@ -1,4 +1,4 @@
-.PHONY: help demo setup test compile check preflight graph-validate replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
+.PHONY: help demo setup test compile check preflight graph-validate graph-validate-all replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -18,6 +18,7 @@ help:
 	@echo "  make check      Run test + compile (common pre-push gate)"
 	@echo "  make preflight  Run graph-validate + replay-check + check"
 	@echo "  make graph-validate Validate surveillance graph config and plugins"
+	@echo "  make graph-validate-all Validate all example robot pack graphs"
 	@echo "  make replay-check Run deterministic replay fixture check"
 	@echo "  make compile    Byte-compile robot_core and shuttle (syntax check)"
 	@echo "  make cpp-smoke  Configure, build, and run C++ smoke_surveillance"
@@ -42,6 +43,12 @@ preflight: graph-validate replay-check check
 graph-validate:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
 	$(ROBOT_CORE) graph-validate examples/robot_packs/surveillance.yaml
+
+graph-validate-all:
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	$(ROBOT_CORE) graph-validate examples/robot_packs/surveillance.yaml
+	$(ROBOT_CORE) graph-validate examples/robot_packs/delivery.yaml
+	$(ROBOT_CORE) graph-validate examples/robot_packs/warehouse.yaml
 
 replay-check:
 	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then $(MAKE) setup; fi
