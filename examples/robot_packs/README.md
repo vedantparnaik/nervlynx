@@ -18,3 +18,9 @@ robot-core run-graph examples/robot_packs/surveillance.yaml --output logs/exampl
 ```
 
 Or use **`make graph-example`** from the repository root after `make setup`.
+
+You can validate core pack structure and plugin references in one go:
+
+```bash
+make graph-validate-all
+```

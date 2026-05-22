@@ -10,6 +10,7 @@ make test     # pytest
 make check    # test + compile (handy before push)
 make preflight  # graph validation + replay check + full local gate
 make graph-validate  # validate surveillance graph structure and plugin refs
+make graph-validate-all  # validate surveillance + delivery + warehouse packs
 make replay-check  # deterministic replay fixture (matches CI)
 make demo     # install, run-example, replay
 make compile  # quick syntax check without pytest

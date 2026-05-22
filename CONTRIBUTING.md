@@ -28,6 +28,7 @@ python benchmarks/benchmark_runtime.py
 make graph-example   # optional: example graph via surveillance pack
 make compile         # optional: byte-compile robot_core and shuttle
 make graph-validate  # optional: validate surveillance graph config + plugins
+make graph-validate-all  # optional: validate all core example packs
 make preflight       # optional: graph + replay + check bundle
 ```
 
