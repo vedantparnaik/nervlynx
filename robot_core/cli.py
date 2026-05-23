@@ -173,18 +173,23 @@ def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> No
 
 
 @app.command("graph-validate")
-def graph_validate(config: Path) -> None:
+def graph_validate(configs: list[Path]) -> None:
   reg = PluginRegistry()
   reg.discover_entrypoints()
   if not reg.catalog().nodes and not reg.catalog().sensors:
     register_builtin_plugins(reg)
-  cfg = load_graph_config(config)
-  issues = validate_graph_config(cfg, registry=reg)
-  if issues:
-    for issue in issues:
-      typer.echo(f"config_error: {issue}")
+  has_errors = False
+  for config in configs:
+    cfg = load_graph_config(config)
+    issues = validate_graph_config(cfg, registry=reg)
+    if issues:
+      has_errors = True
+      for issue in issues:
+        typer.echo(f"{config}: config_error: {issue}")
+      continue
+    typer.echo(f"{config}: graph_config_valid=true")
+  if has_errors:
     raise typer.Exit(code=1)
-  typer.echo("graph_config_valid=true")
 
 
 @app.command("dashboard-demo")

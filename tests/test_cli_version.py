@@ -24,3 +24,33 @@ def test_graph_validate_command_rejects_invalid_fixture() -> None:
   result = runner.invoke(app, ["graph-validate", "tests/fixtures/graph/invalid_missing_nodes.yaml"])
   assert result.exit_code == 1
   assert "config_error: nodes must be a non-empty list" in result.stdout
+
+
+def test_graph_validate_command_accepts_multiple_valid_configs() -> None:
+  runner = CliRunner()
+  result = runner.invoke(
+    app,
+    [
+      "graph-validate",
+      "examples/robot_packs/surveillance.yaml",
+      "examples/robot_packs/delivery.yaml",
+    ],
+  )
+  assert result.exit_code == 0
+  assert "examples/robot_packs/surveillance.yaml: graph_config_valid=true" in result.stdout
+  assert "examples/robot_packs/delivery.yaml: graph_config_valid=true" in result.stdout
+
+
+def test_graph_validate_command_reports_errors_for_any_invalid_config() -> None:
+  runner = CliRunner()
+  result = runner.invoke(
+    app,
+    [
+      "graph-validate",
+      "examples/robot_packs/surveillance.yaml",
+      "tests/fixtures/graph/invalid_missing_nodes.yaml",
+    ],
+  )
+  assert result.exit_code == 1
+  assert "examples/robot_packs/surveillance.yaml: graph_config_valid=true" in result.stdout
+  assert "tests/fixtures/graph/invalid_missing_nodes.yaml: config_error:" in result.stdout
