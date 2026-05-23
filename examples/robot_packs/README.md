@@ -23,4 +23,6 @@ You can validate core pack structure and plugin references in one go:
 
 ```bash
 make graph-validate-all
+# or directly:
+robot-core graph-validate examples/robot_packs/surveillance.yaml examples/robot_packs/delivery.yaml examples/robot_packs/warehouse.yaml
 ```

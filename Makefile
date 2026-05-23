@@ -46,9 +46,10 @@ graph-validate:
 
 graph-validate-all:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
-	$(ROBOT_CORE) graph-validate examples/robot_packs/surveillance.yaml
-	$(ROBOT_CORE) graph-validate examples/robot_packs/delivery.yaml
-	$(ROBOT_CORE) graph-validate examples/robot_packs/warehouse.yaml
+	$(ROBOT_CORE) graph-validate \
+	  examples/robot_packs/surveillance.yaml \
+	  examples/robot_packs/delivery.yaml \
+	  examples/robot_packs/warehouse.yaml
 
 replay-check:
 	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then $(MAKE) setup; fi

@@ -33,3 +33,4 @@ ctest --test-dir cpp_core/build --output-on-failure
 - Graph examples: `examples/robot_packs/`, `deploy/config/`
 - CI workflows: `.github/workflows/`
 - Benchmarks and replay checks: `benchmarks/README.md`
+- Graph validation supports one or many config paths in a single command.
