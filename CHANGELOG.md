@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make preflight` bundles graph validation, replay check, and local checks.
 - `make graph-validate-all` validates surveillance, delivery, and warehouse example packs.
 - `tests/test_example_graph_packs.py` now covers `delivery.yaml` and `warehouse.yaml` too.
+- `robot-core graph-validate` now accepts one or many config paths in one invocation.
+- CLI tests cover mixed-validity multi-config graph validation behavior.
 
 ### Changed
 
@@ -52,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `README.md` and `CONTRIBUTING.md` include graph validation commands.
 - `docs/DEVELOPMENT.md` and `CONTRIBUTING.md` include the `make preflight` flow.
 - `docs/DEVELOPMENT.md`, `CONTRIBUTING.md`, and `examples/robot_packs/README.md` document `make graph-validate-all`.
+- `make graph-validate-all` now validates all core pack files in a single CLI call.
 
 ## [0.2.0] - 2026-04-15
 
