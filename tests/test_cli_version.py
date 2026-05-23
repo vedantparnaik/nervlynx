@@ -54,3 +54,12 @@ def test_graph_validate_command_reports_errors_for_any_invalid_config() -> None:
   assert result.exit_code == 1
   assert "examples/robot_packs/surveillance.yaml: graph_config_valid=true" in result.stdout
   assert "tests/fixtures/graph/invalid_missing_nodes.yaml: config_error:" in result.stdout
+
+
+def test_graph_validate_core_command_checks_all_core_packs() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-validate-core"])
+  assert result.exit_code == 0
+  assert "examples/robot_packs/surveillance.yaml: graph_config_valid=true" in result.stdout
+  assert "examples/robot_packs/delivery.yaml: graph_config_valid=true" in result.stdout
+  assert "examples/robot_packs/warehouse.yaml: graph_config_valid=true" in result.stdout

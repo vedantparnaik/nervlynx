@@ -26,6 +26,33 @@ from robot_core.supervisor import ManagedNode, RuntimeSupervisor
 from robot_core.transport import InMemoryTransport
 
 app = typer.Typer(help="Generic robotics runtime skeleton CLI.")
+CORE_GRAPH_CONFIGS: tuple[Path, ...] = (
+  Path("examples/robot_packs/surveillance.yaml"),
+  Path("examples/robot_packs/delivery.yaml"),
+  Path("examples/robot_packs/warehouse.yaml"),
+)
+
+
+def _build_plugin_registry() -> PluginRegistry:
+  reg = PluginRegistry()
+  reg.discover_entrypoints()
+  if not reg.catalog().nodes and not reg.catalog().sensors:
+    register_builtin_plugins(reg)
+  return reg
+
+
+def _validate_graph_paths(configs: list[Path] | tuple[Path, ...], reg: PluginRegistry) -> bool:
+  has_errors = False
+  for config in configs:
+    cfg = load_graph_config(config)
+    issues = validate_graph_config(cfg, registry=reg)
+    if issues:
+      has_errors = True
+      for issue in issues:
+        typer.echo(f"{config}: config_error: {issue}")
+      continue
+    typer.echo(f"{config}: graph_config_valid=true")
+  return not has_errors
 
 
 @app.command("run-example")
@@ -149,10 +176,7 @@ def supervisor_demo() -> None:
 
 @app.command("run-graph")
 def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> None:
-  reg = PluginRegistry()
-  reg.discover_entrypoints()
-  if not reg.catalog().nodes and not reg.catalog().sensors:
-    register_builtin_plugins(reg)
+  reg = _build_plugin_registry()
   runtime = PipelineRuntime(topic_priority={"safety.event": 1})
   cfg = load_graph_config(config)
   issues = validate_graph_config(cfg, registry=reg)
@@ -174,21 +198,16 @@ def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> No
 
 @app.command("graph-validate")
 def graph_validate(configs: list[Path]) -> None:
-  reg = PluginRegistry()
-  reg.discover_entrypoints()
-  if not reg.catalog().nodes and not reg.catalog().sensors:
-    register_builtin_plugins(reg)
-  has_errors = False
-  for config in configs:
-    cfg = load_graph_config(config)
-    issues = validate_graph_config(cfg, registry=reg)
-    if issues:
-      has_errors = True
-      for issue in issues:
-        typer.echo(f"{config}: config_error: {issue}")
-      continue
-    typer.echo(f"{config}: graph_config_valid=true")
-  if has_errors:
+  reg = _build_plugin_registry()
+  if not _validate_graph_paths(configs, reg):
+    raise typer.Exit(code=1)
+
+
+@app.command("graph-validate-core")
+def graph_validate_core() -> None:
+  """Validate bundled core example pack configs."""
+  reg = _build_plugin_registry()
+  if not _validate_graph_paths(CORE_GRAPH_CONFIGS, reg):
     raise typer.Exit(code=1)
 
 
