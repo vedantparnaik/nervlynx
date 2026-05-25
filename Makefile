@@ -16,7 +16,7 @@ help:
 	@echo "  make setup      Create venv and install project in dev mode"
 	@echo "  make test       Run pytest (implies setup if venv missing)"
 	@echo "  make check      Run test + compile (common pre-push gate)"
-	@echo "  make preflight  Run graph-validate + replay-check + check"
+	@echo "  make preflight  Run graph-validate-core + replay-check + check"
 	@echo "  make graph-validate Validate surveillance graph config and plugins"
 	@echo "  make graph-validate-core Validate bundled core example robot packs"
 	@echo "  make replay-check Run deterministic replay fixture check"
