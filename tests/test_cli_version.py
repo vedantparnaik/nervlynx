@@ -26,6 +26,13 @@ def test_graph_validate_command_rejects_invalid_fixture() -> None:
   assert "config_error: nodes must be a non-empty list" in result.stdout
 
 
+def test_graph_validate_command_requires_at_least_one_path() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-validate"])
+  assert result.exit_code == 2
+  assert "Missing argument 'CONFIGS...'" in result.stderr
+
+
 def test_graph_validate_command_accepts_multiple_valid_configs() -> None:
   runner = CliRunner()
   result = runner.invoke(
