@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `robot-core graph-validate` now accepts one or many config paths in one invocation.
 - CLI tests cover mixed-validity multi-config graph validation behavior.
 - CI now runs `robot-core graph-validate-core` on Python 3.11 before graph execution.
+- CLI tests now cover `graph-validate` no-argument usage failure.
 
 ### Changed
 
@@ -57,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/DEVELOPMENT.md`, `CONTRIBUTING.md`, and `examples/robot_packs/README.md` document `make graph-validate-core`.
 - `make graph-validate-core` now validates all core pack files in a single CLI call.
 - `make preflight` now uses `graph-validate-core` (not single-file `graph-validate`).
+- `README.md` Common Commands now includes `robot-core graph-validate-core`.
 
 ## [0.2.0] - 2026-04-15
 
