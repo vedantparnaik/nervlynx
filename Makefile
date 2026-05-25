@@ -38,7 +38,7 @@ compile:
 
 check: test compile
 
-preflight: graph-validate replay-check check
+preflight: graph-validate-core replay-check check
 
 graph-validate:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi

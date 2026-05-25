@@ -29,7 +29,7 @@ make graph-example   # optional: example graph via surveillance pack
 make compile         # optional: byte-compile robot_core and shuttle
 make graph-validate  # optional: validate surveillance graph config + plugins
 make graph-validate-core  # optional: validate bundled core example packs
-make preflight       # optional: graph + replay + check bundle
+make preflight       # optional: core-graph + replay + check bundle
 ```
 
 Scaffold a new plugin pack: `nervlynx init <name>` (see `docs/PLUGIN_AUTHORING.md`).

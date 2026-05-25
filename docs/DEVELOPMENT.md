@@ -8,7 +8,7 @@ Shortcuts for day-to-day work on NervLynx. For full policy and PR expectations s
 make setup    # once: venv + editable install
 make test     # pytest
 make check    # test + compile (handy before push)
-make preflight  # graph validation + replay check + full local gate
+make preflight  # core graph validation + replay check + full local gate
 make graph-validate  # validate surveillance graph structure and plugin refs
 make graph-validate-core  # validate bundled surveillance/delivery/warehouse packs
 make replay-check  # deterministic replay fixture (matches CI)
