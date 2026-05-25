@@ -32,6 +32,9 @@ jobs:
       - name: Contracts codegen
         if: matrix.python-version == '3.11'
         run: robot-core contracts-codegen
+      - name: Validate core graph packs
+        if: matrix.python-version == '3.11'
+        run: robot-core graph-validate-core
       - name: Graph run
         if: matrix.python-version == '3.11'
         run: robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
