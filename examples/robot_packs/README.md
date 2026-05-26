@@ -26,3 +26,9 @@ make graph-validate-core
 # or directly:
 robot-core graph-validate-core
 ```
+
+You can also execute all core packs and write traces to `logs/*_trace.jsonl`:
+
+```bash
+make graph-run-core
+```

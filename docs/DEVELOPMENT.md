@@ -11,6 +11,7 @@ make check    # test + compile (handy before push)
 make preflight  # core graph validation + replay check + full local gate
 make graph-validate  # validate surveillance graph structure and plugin refs
 make graph-validate-core  # validate bundled surveillance/delivery/warehouse packs
+make graph-run-core  # execute bundled core packs and emit logs/*_trace.jsonl
 make replay-check  # deterministic replay fixture (matches CI)
 make demo     # install, run-example, replay
 make compile  # quick syntax check without pytest

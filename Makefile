@@ -1,4 +1,4 @@
-.PHONY: help demo setup test compile check preflight graph-validate graph-validate-core replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
+.PHONY: help demo setup test compile check preflight graph-validate graph-validate-core graph-run-core replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -7,6 +7,10 @@ PYTEST := $(VENV_DIR)/bin/pytest
 ROBOT_CORE := $(VENV_DIR)/bin/robot-core
 # Prefer venv interpreter when present so scripts can import robot_core.
 RUN_PYTHON := $(if $(wildcard $(VENV_DIR)/bin/python),$(VENV_DIR)/bin/python,$(PYTHON))
+CORE_GRAPH_PACKS := \
+	examples/robot_packs/surveillance.yaml \
+	examples/robot_packs/delivery.yaml \
+	examples/robot_packs/warehouse.yaml
 
 help:
 	@echo "NervLynx developer shortcuts"
@@ -19,6 +23,7 @@ help:
 	@echo "  make preflight  Run graph-validate-core + replay-check + check"
 	@echo "  make graph-validate Validate surveillance graph config and plugins"
 	@echo "  make graph-validate-core Validate bundled core example robot packs"
+	@echo "  make graph-run-core Run all core example robot packs and write traces"
 	@echo "  make replay-check Run deterministic replay fixture check"
 	@echo "  make compile    Byte-compile robot_core and shuttle (syntax check)"
 	@echo "  make cpp-smoke  Configure, build, and run C++ smoke_surveillance"
@@ -47,6 +52,14 @@ graph-validate:
 graph-validate-core:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
 	$(ROBOT_CORE) graph-validate-core
+
+graph-run-core:
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	mkdir -p logs
+	for cfg in $(CORE_GRAPH_PACKS); do \
+	  name=$$(basename "$$cfg" .yaml); \
+	  $(ROBOT_CORE) run-graph "$$cfg" --output "logs/$${name}_trace.jsonl"; \
+	done
 
 replay-check:
 	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then $(MAKE) setup; fi

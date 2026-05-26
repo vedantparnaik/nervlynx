@@ -26,6 +26,7 @@ robot-core smoke-matrix --output-dir logs/smoke_matrix
 robot-core chaos-pass --drop-probability 0.1 --mutate-probability 0.1
 python benchmarks/benchmark_runtime.py
 make graph-example   # optional: example graph via surveillance pack
+make graph-run-core  # optional: run bundled core graph packs end-to-end
 make compile         # optional: byte-compile robot_core and shuttle
 make graph-validate  # optional: validate surveillance graph config + plugins
 make graph-validate-core  # optional: validate bundled core example packs
