@@ -26,6 +26,13 @@ def test_graph_validate_command_rejects_invalid_fixture() -> None:
   assert "config_error: nodes must be a non-empty list" in result.stdout
 
 
+def test_graph_validate_command_rejects_invalid_input_topics_fixture() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-validate", "tests/fixtures/graph/invalid_input_topics.yaml"])
+  assert result.exit_code == 1
+  assert "config_error: nodes[0].input_topics must be a list of non-empty strings" in result.stdout
+
+
 def test_graph_validate_command_requires_at_least_one_path() -> None:
   runner = CliRunner()
   result = runner.invoke(app, ["graph-validate"])

@@ -30,3 +30,11 @@ def test_graph_validation_reports_missing_nodes_list() -> None:
   cfg = load_graph_config(Path("tests/fixtures/graph/invalid_missing_nodes.yaml"))
   issues = validate_graph_config(cfg, registry=reg)
   assert "nodes must be a non-empty list" in issues
+
+
+def test_graph_validation_reports_invalid_input_topics_shape() -> None:
+  reg = PluginRegistry()
+  register_builtin_plugins(reg)
+  cfg = load_graph_config(Path("tests/fixtures/graph/invalid_input_topics.yaml"))
+  issues = validate_graph_config(cfg, registry=reg)
+  assert "nodes[0].input_topics must be a list of non-empty strings" in issues

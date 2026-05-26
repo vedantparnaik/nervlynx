@@ -1,0 +1,9 @@
+name: invalid_graph_input_topics
+seed_topic: sensors.bundle
+seed_schema: SensorBundle
+seed_payload:
+  camera_count: 2
+  gps_fix: true
+nodes:
+  - plugin: perception_node
+    input_topics: sensors.bundle
