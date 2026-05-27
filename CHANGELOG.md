@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invalid fixture coverage for malformed `input_topics` (`tests/fixtures/graph/invalid_input_topics.yaml`).
 - `make graph-run-core` executes bundled core packs and writes trace files to `logs/`.
 - `robot-core graph-run-core --output-dir <dir>` executes bundled core packs in one CLI call.
+- CI now runs `robot-core graph-run-core --output-dir logs/core_graph_runs` and uploads resulting traces as artifacts.
+- `make graph-smoke` bundles core graph validation and execution locally.
+- `tests/test_cli_graph_run_core.py` now verifies summary output and per-trace event counts.
 
 ### Changed
 
@@ -64,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `README.md` Common Commands now includes `robot-core graph-validate-core`.
 - Development/contributing and robot-pack docs include `make graph-run-core`.
 - `make graph-run-core` now delegates to `robot-core graph-run-core --output-dir logs`.
+- Development/contributing docs include `make graph-smoke`.
 
 ## [0.2.0] - 2026-04-15
 
