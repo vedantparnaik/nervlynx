@@ -1,4 +1,4 @@
-.PHONY: help demo setup test compile check preflight graph-validate graph-validate-core graph-run-core replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
+.PHONY: help demo setup test compile check preflight graph-smoke graph-validate graph-validate-core graph-run-core replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -17,6 +17,7 @@ help:
 	@echo "  make test       Run pytest (implies setup if venv missing)"
 	@echo "  make check      Run test + compile (common pre-push gate)"
 	@echo "  make preflight  Run graph-validate-core + replay-check + check"
+	@echo "  make graph-smoke Run graph-validate-core + graph-run-core"
 	@echo "  make graph-validate Validate surveillance graph config and plugins"
 	@echo "  make graph-validate-core Validate bundled core example robot packs"
 	@echo "  make graph-run-core Run all core packs and write logs/*_trace.jsonl"
@@ -40,6 +41,8 @@ compile:
 check: test compile
 
 preflight: graph-validate-core replay-check check
+
+graph-smoke: graph-validate-core graph-run-core
 
 graph-validate:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi

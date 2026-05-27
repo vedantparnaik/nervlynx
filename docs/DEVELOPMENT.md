@@ -9,6 +9,7 @@ make setup    # once: venv + editable install
 make test     # pytest
 make check    # test + compile (handy before push)
 make preflight  # core graph validation + replay check + full local gate
+make graph-smoke  # core graph validation + core graph execution bundle
 make graph-validate  # validate surveillance graph structure and plugin refs
 make graph-validate-core  # validate bundled surveillance/delivery/warehouse packs
 make graph-run-core  # execute bundled core packs and emit logs/*_trace.jsonl
