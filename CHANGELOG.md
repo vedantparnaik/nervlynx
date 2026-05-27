@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CLI tests now cover `graph-validate` no-argument usage failure.
 - Invalid fixture coverage for malformed `input_topics` (`tests/fixtures/graph/invalid_input_topics.yaml`).
 - `make graph-run-core` executes bundled core packs and writes trace files to `logs/`.
+- `robot-core graph-run-core --output-dir <dir>` executes bundled core packs in one CLI call.
 
 ### Changed
 
@@ -62,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make preflight` now uses `graph-validate-core` (not single-file `graph-validate`).
 - `README.md` Common Commands now includes `robot-core graph-validate-core`.
 - Development/contributing and robot-pack docs include `make graph-run-core`.
+- `make graph-run-core` now delegates to `robot-core graph-run-core --output-dir logs`.
 
 ## [0.2.0] - 2026-04-15
 
