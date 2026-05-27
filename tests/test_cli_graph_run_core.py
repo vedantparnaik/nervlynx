@@ -11,6 +11,14 @@ def test_graph_run_core_writes_all_core_pack_traces(tmp_path: Path) -> None:
   result = runner.invoke(app, ["graph-run-core", "--output-dir", str(output_dir)])
   assert result.exit_code == 0
   assert "core_graph_runs_ok packs=3" in result.stdout
+  assert "total_messages=9" in result.stdout
   assert (output_dir / "surveillance_trace.jsonl").exists()
   assert (output_dir / "delivery_trace.jsonl").exists()
   assert (output_dir / "warehouse_trace.jsonl").exists()
+  for path in (
+    output_dir / "surveillance_trace.jsonl",
+    output_dir / "delivery_trace.jsonl",
+    output_dir / "warehouse_trace.jsonl",
+  ):
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 3
