@@ -55,6 +55,26 @@ def _validate_graph_paths(configs: list[Path] | tuple[Path, ...], reg: PluginReg
   return not has_errors
 
 
+def _run_graph_config(config_path: Path, output: Path, reg: PluginRegistry) -> int:
+  runtime = PipelineRuntime(topic_priority={"safety.event": 1})
+  cfg = load_graph_config(config_path)
+  issues = validate_graph_config(cfg, registry=reg)
+  if issues:
+    for issue in issues:
+      typer.echo(f"{config_path}: config_error: {issue}")
+    raise typer.Exit(code=1)
+  wire_graph_from_config(runtime, reg, cfg)
+  seed = runtime.publish(
+    topic=str(cfg.get("seed_topic", "sensors.bundle")),
+    source="graph_runner",
+    schema=str(cfg.get("seed_schema", "SensorBundle")),
+    payload=dict(cfg.get("seed_payload", {})),
+  )
+  trace = runtime.run_once(seed)
+  write_jsonl(output, trace)
+  return len(trace)
+
+
 @app.command("run-example")
 def run_example(output: Path = Path("logs/robot_core_trace.jsonl")) -> None:
   rt = build_reference_runtime()
@@ -177,23 +197,8 @@ def supervisor_demo() -> None:
 @app.command("run-graph")
 def run_graph(config: Path, output: Path = Path("logs/graph_trace.jsonl")) -> None:
   reg = _build_plugin_registry()
-  runtime = PipelineRuntime(topic_priority={"safety.event": 1})
-  cfg = load_graph_config(config)
-  issues = validate_graph_config(cfg, registry=reg)
-  if issues:
-    for issue in issues:
-      typer.echo(f"config_error: {issue}")
-    raise typer.Exit(code=1)
-  wire_graph_from_config(runtime, reg, cfg)
-  seed = runtime.publish(
-    topic=str(cfg.get("seed_topic", "sensors.bundle")),
-    source="graph_runner",
-    schema=str(cfg.get("seed_schema", "SensorBundle")),
-    payload=dict(cfg.get("seed_payload", {})),
-  )
-  trace = runtime.run_once(seed)
-  write_jsonl(output, trace)
-  typer.echo(f"trace_messages={len(trace)} output={output}")
+  trace_messages = _run_graph_config(config, output, reg)
+  typer.echo(f"trace_messages={trace_messages} output={output}")
 
 
 @app.command("graph-validate")
@@ -209,6 +214,20 @@ def graph_validate_core() -> None:
   reg = _build_plugin_registry()
   if not _validate_graph_paths(CORE_GRAPH_CONFIGS, reg):
     raise typer.Exit(code=1)
+
+
+@app.command("graph-run-core")
+def graph_run_core(output_dir: Path = Path("logs/core_graph_runs")) -> None:
+  """Execute bundled core graph configs and write one trace per pack."""
+  reg = _build_plugin_registry()
+  output_dir.mkdir(parents=True, exist_ok=True)
+  total_messages = 0
+  for config in CORE_GRAPH_CONFIGS:
+    output = output_dir / f"{config.stem}_trace.jsonl"
+    trace_messages = _run_graph_config(config, output, reg)
+    total_messages += trace_messages
+    typer.echo(f"{config}: trace_messages={trace_messages} output={output}")
+  typer.echo(f"core_graph_runs_ok packs={len(CORE_GRAPH_CONFIGS)} total_messages={total_messages} output_dir={output_dir}")
 
 
 @app.command("dashboard-demo")
