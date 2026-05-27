@@ -35,3 +35,4 @@ ctest --test-dir cpp_core/build --output-on-failure
 - CI workflows: `.github/workflows/`
 - Benchmarks and replay checks: `benchmarks/README.md`
 - Graph validation supports one or many config paths in a single command; `graph-validate-core` is the fast path for bundled packs.
+- `graph-run-core` is also available directly: `robot-core graph-run-core --output-dir logs`.
