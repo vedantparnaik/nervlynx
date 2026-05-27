@@ -35,6 +35,9 @@ jobs:
       - name: Validate core graph packs
         if: matrix.python-version == '3.11'
         run: robot-core graph-validate-core
+      - name: Run core graph packs
+        if: matrix.python-version == '3.11'
+        run: robot-core graph-run-core --output-dir logs/core_graph_runs
       - name: Graph run
         if: matrix.python-version == '3.11'
         run: robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
@@ -58,6 +61,7 @@ jobs:
           path: |
             logs/benchmark_runtime.json
             logs/replay_actual_trace.jsonl
+            logs/core_graph_runs/*.jsonl
 
   cpp-tests:
     runs-on: ubuntu-latest
