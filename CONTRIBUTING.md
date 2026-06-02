@@ -31,6 +31,7 @@ make graph-smoke     # optional: validate + run bundled core graph packs
 make compile         # optional: byte-compile robot_core and shuttle
 make graph-validate  # optional: validate surveillance graph config + plugins
 make graph-validate-core  # optional: validate bundled core example packs
+make graph-list-core-json  # optional: list bundled core packs as machine-readable JSON
 make preflight       # optional: core-graph + replay + check bundle
 ```
 

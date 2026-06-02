@@ -13,6 +13,7 @@ make graph-smoke  # core graph validation + core graph execution bundle
 make graph-validate  # validate surveillance graph structure and plugin refs
 make graph-validate-core  # validate bundled surveillance/delivery/warehouse packs
 make graph-list-core  # print bundled core graph config paths
+make graph-list-core-json  # print bundled core graph config paths as JSON
 make graph-run-core  # execute bundled core packs and emit logs/*_trace.jsonl
 make replay-check  # deterministic replay fixture (matches CI)
 make demo     # install, run-example, replay
@@ -37,4 +38,5 @@ ctest --test-dir cpp_core/build --output-on-failure
 - CI workflows: `.github/workflows/`
 - Benchmarks and replay checks: `benchmarks/README.md`
 - Graph validation supports one or many config paths in a single command; `graph-validate-core` is the fast path for bundled packs.
+- Core pack discovery supports text and JSON formats via `robot-core graph-list-core --format <text|json>`.
 - `graph-run-core` is also available directly: `robot-core graph-run-core --output-dir logs`.
