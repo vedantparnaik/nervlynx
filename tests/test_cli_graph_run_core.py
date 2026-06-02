@@ -32,3 +32,19 @@ def test_graph_list_core_prints_bundled_config_paths() -> None:
   assert "examples/robot_packs/delivery.yaml" in result.stdout
   assert "examples/robot_packs/warehouse.yaml" in result.stdout
   assert "core_graph_count=3" in result.stdout
+
+
+def test_graph_list_core_supports_json_output() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-list-core", "--format", "json"])
+  assert result.exit_code == 0
+  assert '"count": 3' in result.stdout
+  assert '"graphs": [' in result.stdout
+  assert '"examples/robot_packs/surveillance.yaml"' in result.stdout
+
+
+def test_graph_list_core_rejects_unknown_output_format() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-list-core", "--format", "yaml"])
+  assert result.exit_code == 2
+  assert "format_error: supported values are text,json" in result.stdout

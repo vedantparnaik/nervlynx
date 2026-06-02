@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -231,11 +232,18 @@ def graph_run_core(output_dir: Path = Path("logs/core_graph_runs")) -> None:
 
 
 @app.command("graph-list-core")
-def graph_list_core() -> None:
+def graph_list_core(output_format: str = typer.Option("text", "--format")) -> None:
   """List bundled core graph config paths."""
-  for config in CORE_GRAPH_CONFIGS:
-    typer.echo(str(config))
-  typer.echo(f"core_graph_count={len(CORE_GRAPH_CONFIGS)}")
+  config_paths = [str(config) for config in CORE_GRAPH_CONFIGS]
+  if output_format == "json":
+    typer.echo(json.dumps({"graphs": config_paths, "count": len(config_paths)}))
+    return
+  if output_format != "text":
+    typer.echo("format_error: supported values are text,json")
+    raise typer.Exit(code=2)
+  for config in config_paths:
+    typer.echo(config)
+  typer.echo(f"core_graph_count={len(config_paths)}")
 
 
 @app.command("dashboard-demo")
