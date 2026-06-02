@@ -12,6 +12,7 @@ make preflight  # core graph validation + replay check + full local gate
 make graph-smoke  # core graph validation + core graph execution bundle
 make graph-validate  # validate surveillance graph structure and plugin refs
 make graph-validate-core  # validate bundled surveillance/delivery/warehouse packs
+make graph-list-core  # print bundled core graph config paths
 make graph-run-core  # execute bundled core packs and emit logs/*_trace.jsonl
 make replay-check  # deterministic replay fixture (matches CI)
 make demo     # install, run-example, replay

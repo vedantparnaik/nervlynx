@@ -27,6 +27,14 @@ make graph-validate-core
 robot-core graph-validate-core
 ```
 
+To list which bundled core packs are included:
+
+```bash
+make graph-list-core
+# or directly:
+robot-core graph-list-core
+```
+
 You can also execute all core packs and write traces to `logs/*_trace.jsonl`:
 
 ```bash
