@@ -230,6 +230,14 @@ def graph_run_core(output_dir: Path = Path("logs/core_graph_runs")) -> None:
   typer.echo(f"core_graph_runs_ok packs={len(CORE_GRAPH_CONFIGS)} total_messages={total_messages} output_dir={output_dir}")
 
 
+@app.command("graph-list-core")
+def graph_list_core() -> None:
+  """List bundled core graph config paths."""
+  for config in CORE_GRAPH_CONFIGS:
+    typer.echo(str(config))
+  typer.echo(f"core_graph_count={len(CORE_GRAPH_CONFIGS)}")
+
+
 @app.command("dashboard-demo")
 def dashboard_demo(duration_s: float = 5.0, port: int = 9120) -> None:
   runtime = PipelineRuntime()
