@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/test_cli_graph_run_core.py` now verifies summary output and per-trace event counts.
 - `robot-core graph-list-core` and `make graph-list-core` list bundled core graph config paths.
 - `robot-core graph-list-core --format json` and `make graph-list-core-json` for machine-readable core pack discovery.
+- `make graph-validate-file GRAPH=<path>` and `make graph-run-file GRAPH=<path> GRAPH_OUTPUT=<path>` for custom graph iteration.
 
 ### Changed
 
@@ -72,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development/contributing docs include `make graph-smoke`.
 - README/development/robot-pack docs now include core graph list command usage.
 - Core graph list docs now include JSON output usage for scripting.
+- Docs now include parameterized graph Make targets for non-core packs.
 
 ## [0.2.0] - 2026-04-15
 
