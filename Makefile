@@ -1,4 +1,4 @@
-.PHONY: help demo setup test compile check preflight graph-smoke graph-validate graph-validate-core graph-list-core graph-list-core-json graph-run-core replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
+.PHONY: help demo setup test compile check preflight graph-smoke graph-validate graph-validate-core graph-validate-file graph-list-core graph-list-core-json graph-run-core graph-run-file replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -7,6 +7,8 @@ PYTEST := $(VENV_DIR)/bin/pytest
 ROBOT_CORE := $(VENV_DIR)/bin/robot-core
 # Prefer venv interpreter when present so scripts can import robot_core.
 RUN_PYTHON := $(if $(wildcard $(VENV_DIR)/bin/python),$(VENV_DIR)/bin/python,$(PYTHON))
+GRAPH ?= examples/robot_packs/surveillance.yaml
+GRAPH_OUTPUT ?= logs/graph_file_trace.jsonl
 
 help:
 	@echo "NervLynx developer shortcuts"
@@ -20,9 +22,11 @@ help:
 	@echo "  make graph-smoke Run graph-validate-core + graph-run-core"
 	@echo "  make graph-validate Validate surveillance graph config and plugins"
 	@echo "  make graph-validate-core Validate bundled core example robot packs"
+	@echo "  make graph-validate-file Validate graph via GRAPH=<path>"
 	@echo "  make graph-list-core List bundled core graph config paths"
 	@echo "  make graph-list-core-json List bundled core graph configs as JSON"
 	@echo "  make graph-run-core Run all core packs and write logs/*_trace.jsonl"
+	@echo "  make graph-run-file Run graph via GRAPH=<path> and GRAPH_OUTPUT=<path>"
 	@echo "  make replay-check Run deterministic replay fixture check"
 	@echo "  make compile    Byte-compile robot_core and shuttle (syntax check)"
 	@echo "  make cpp-smoke  Configure, build, and run C++ smoke_surveillance"
@@ -54,6 +58,10 @@ graph-validate-core:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
 	$(ROBOT_CORE) graph-validate-core
 
+graph-validate-file:
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	$(ROBOT_CORE) graph-validate "$(GRAPH)"
+
 graph-list-core:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
 	$(ROBOT_CORE) graph-list-core
@@ -65,6 +73,11 @@ graph-list-core-json:
 graph-run-core:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
 	$(ROBOT_CORE) graph-run-core --output-dir logs
+
+graph-run-file:
+	mkdir -p logs
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	$(ROBOT_CORE) run-graph "$(GRAPH)" --output "$(GRAPH_OUTPUT)"
 
 replay-check:
 	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then $(MAKE) setup; fi
