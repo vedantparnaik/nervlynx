@@ -117,6 +117,8 @@ robot-core graph-validate deploy/config/graph_surveillance.yaml
 robot-core graph-validate-core
 robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl
 robot-core graph-run-core --output-dir logs
+make graph-validate-file GRAPH=examples/robot_packs/warehouse.yaml
+make graph-run-file GRAPH=examples/robot_packs/warehouse.yaml GRAPH_OUTPUT=logs/warehouse_trace.jsonl
 
 # Distributed node mode over transport (local demo)
 robot-core distributed-demo

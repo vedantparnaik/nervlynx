@@ -19,6 +19,13 @@ robot-core run-graph examples/robot_packs/surveillance.yaml --output logs/exampl
 
 Or use **`make graph-example`** from the repository root after `make setup`.
 
+You can validate or run any chosen pack file with parameterized Make targets:
+
+```bash
+make graph-validate-file GRAPH=examples/robot_packs/warehouse.yaml
+make graph-run-file GRAPH=examples/robot_packs/warehouse.yaml GRAPH_OUTPUT=logs/warehouse_trace.jsonl
+```
+
 You can validate core pack structure and plugin references in one go:
 
 ```bash
