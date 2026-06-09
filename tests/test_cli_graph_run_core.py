@@ -2,6 +2,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+import robot_core.cli as cli
 from robot_core.cli import app
 
 
@@ -48,3 +49,20 @@ def test_graph_list_core_rejects_unknown_output_format() -> None:
   result = runner.invoke(app, ["graph-list-core", "--format", "yaml"])
   assert result.exit_code == 2
   assert "format_error: supported values are text,json" in result.stdout
+
+
+def test_graph_list_core_verify_exists_text_mode() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-list-core", "--verify-exists"])
+  assert result.exit_code == 0
+  assert "core_graph_files_exist=true" in result.stdout
+  assert "missing_graph_configs=0" in result.stdout
+
+
+def test_graph_list_core_verify_exists_fails_for_missing_config(monkeypatch) -> None:
+  runner = CliRunner()
+  monkeypatch.setattr(cli, "CORE_GRAPH_CONFIGS", (Path("examples/robot_packs/missing.yaml"),))
+  result = runner.invoke(app, ["graph-list-core", "--verify-exists", "--format", "json"])
+  assert result.exit_code == 1
+  assert '"all_exist": false' in result.stdout
+  assert '"missing": ["examples/robot_packs/missing.yaml"]' in result.stdout

@@ -232,11 +232,21 @@ def graph_run_core(output_dir: Path = Path("logs/core_graph_runs")) -> None:
 
 
 @app.command("graph-list-core")
-def graph_list_core(output_format: str = typer.Option("text", "--format")) -> None:
+def graph_list_core(
+  output_format: str = typer.Option("text", "--format"),
+  verify_exists: bool = typer.Option(False, "--verify-exists"),
+) -> None:
   """List bundled core graph config paths."""
   config_paths = [str(config) for config in CORE_GRAPH_CONFIGS]
+  missing_paths = [str(config) for config in CORE_GRAPH_CONFIGS if not config.exists()]
   if output_format == "json":
-    typer.echo(json.dumps({"graphs": config_paths, "count": len(config_paths)}))
+    payload: dict[str, object] = {"graphs": config_paths, "count": len(config_paths)}
+    if verify_exists:
+      payload["all_exist"] = len(missing_paths) == 0
+      payload["missing"] = missing_paths
+    typer.echo(json.dumps(payload))
+    if verify_exists and missing_paths:
+      raise typer.Exit(code=1)
     return
   if output_format != "text":
     typer.echo("format_error: supported values are text,json")
@@ -244,6 +254,11 @@ def graph_list_core(output_format: str = typer.Option("text", "--format")) -> No
   for config in config_paths:
     typer.echo(config)
   typer.echo(f"core_graph_count={len(config_paths)}")
+  if verify_exists:
+    typer.echo("core_graph_files_exist=" + str(len(missing_paths) == 0).lower())
+    typer.echo(f"missing_graph_configs={len(missing_paths)}")
+    if missing_paths:
+      raise typer.Exit(code=1)
 
 
 @app.command("dashboard-demo")
