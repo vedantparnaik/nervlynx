@@ -33,6 +33,7 @@ make graph-validate  # optional: validate surveillance graph config + plugins
 make graph-validate-core  # optional: validate bundled core example packs
 make graph-validate-file GRAPH=examples/robot_packs/warehouse.yaml  # optional: validate any graph file
 make graph-list-core-json  # optional: list bundled core packs as machine-readable JSON
+make graph-list-core-verify  # optional: fail if bundled core graph files are missing
 make graph-run-file GRAPH=examples/robot_packs/warehouse.yaml GRAPH_OUTPUT=logs/warehouse_trace.jsonl
 make preflight       # optional: core-graph + replay + check bundle
 ```
