@@ -35,6 +35,9 @@ jobs:
       - name: Validate core graph packs
         if: matrix.python-version == '3.11'
         run: robot-core graph-validate-core
+      - name: Verify core graph pack files exist
+        if: matrix.python-version == '3.11'
+        run: robot-core graph-list-core --verify-exists
       - name: Run core graph packs
         if: matrix.python-version == '3.11'
         run: robot-core graph-run-core --output-dir logs/core_graph_runs
