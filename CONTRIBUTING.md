@@ -35,7 +35,7 @@ make graph-validate-file GRAPH=examples/robot_packs/warehouse.yaml  # optional: 
 make graph-list-core-json  # optional: list bundled core packs as machine-readable JSON
 make graph-list-core-verify  # optional: fail if bundled core graph files are missing
 make graph-run-file GRAPH=examples/robot_packs/warehouse.yaml GRAPH_OUTPUT=logs/warehouse_trace.jsonl
-make preflight       # optional: core-graph + replay + check bundle
+make preflight       # optional: core-graph existence + validation + replay + check bundle
 ```
 
 Scaffold a new plugin pack: `nervlynx init <name>` (see `docs/PLUGIN_AUTHORING.md`).

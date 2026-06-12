@@ -8,7 +8,7 @@ Shortcuts for day-to-day work on NervLynx. For full policy and PR expectations s
 make setup    # once: venv + editable install
 make test     # pytest
 make check    # test + compile (handy before push)
-make preflight  # core graph validation + replay check + full local gate
+make preflight  # core graph existence + validation + replay check + full local gate
 make graph-smoke  # core graph validation + core graph execution bundle
 make graph-validate  # validate surveillance graph structure and plugin refs
 make graph-validate-core  # validate bundled surveillance/delivery/warehouse packs
@@ -44,4 +44,5 @@ ctest --test-dir cpp_core/build --output-on-failure
 - Make targets `graph-validate-file` and `graph-run-file` let you pass custom graph paths via `GRAPH=...`.
 - Core pack discovery supports text and JSON formats via `robot-core graph-list-core --format <text|json>`.
 - Add `--verify-exists` to make graph discovery fail if a bundled config path goes missing.
+- `make preflight` includes the core graph existence check before validation and tests.
 - `graph-run-core` is also available directly: `robot-core graph-run-core --output-dir logs`.
