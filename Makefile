@@ -1,4 +1,4 @@
-.PHONY: help demo setup test compile check preflight graph-smoke graph-validate graph-validate-core graph-validate-file graph-list-core graph-list-core-json graph-list-core-verify graph-run-core graph-run-file replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
+.PHONY: help demo setup test compile check preflight graph-smoke graph-validate graph-validate-core graph-validate-file graph-list-core graph-list-core-json graph-list-core-verify graph-list-core-verify-json graph-run-core graph-run-file replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -26,6 +26,7 @@ help:
 	@echo "  make graph-list-core List bundled core graph config paths"
 	@echo "  make graph-list-core-json List bundled core graph configs as JSON"
 	@echo "  make graph-list-core-verify Verify bundled core graph config files exist"
+	@echo "  make graph-list-core-verify-json Verify core graph files and print JSON"
 	@echo "  make graph-run-core Run all core packs and write logs/*_trace.jsonl"
 	@echo "  make graph-run-file Run graph via GRAPH=<path> and GRAPH_OUTPUT=<path>"
 	@echo "  make replay-check Run deterministic replay fixture check"
@@ -74,6 +75,10 @@ graph-list-core-json:
 graph-list-core-verify:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
 	$(ROBOT_CORE) graph-list-core --verify-exists
+
+graph-list-core-verify-json:
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	$(ROBOT_CORE) graph-list-core --verify-exists --format json
 
 graph-run-core:
 	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi

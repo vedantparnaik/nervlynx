@@ -59,6 +59,14 @@ def test_graph_list_core_verify_exists_text_mode() -> None:
   assert "missing_graph_configs=0" in result.stdout
 
 
+def test_graph_list_core_verify_exists_json_mode() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-list-core", "--verify-exists", "--format", "json"])
+  assert result.exit_code == 0
+  assert '"all_exist": true' in result.stdout
+  assert '"missing": []' in result.stdout
+
+
 def test_graph_list_core_verify_exists_fails_for_missing_config(monkeypatch) -> None:
   runner = CliRunner()
   monkeypatch.setattr(cli, "CORE_GRAPH_CONFIGS", (Path("examples/robot_packs/missing.yaml"),))
