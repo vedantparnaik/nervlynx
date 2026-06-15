@@ -16,6 +16,7 @@ make graph-validate-file GRAPH=examples/robot_packs/warehouse.yaml  # validate a
 make graph-list-core  # print bundled core graph config paths
 make graph-list-core-json  # print bundled core graph config paths as JSON
 make graph-list-core-verify  # fail fast if bundled core graph files are missing
+make graph-list-core-verify-json  # verify bundled core graph files and print JSON
 make graph-run-core  # execute bundled core packs and emit logs/*_trace.jsonl
 make graph-run-file GRAPH=examples/robot_packs/warehouse.yaml GRAPH_OUTPUT=logs/warehouse_trace.jsonl
 make replay-check  # deterministic replay fixture (matches CI)
@@ -44,5 +45,6 @@ ctest --test-dir cpp_core/build --output-on-failure
 - Make targets `graph-validate-file` and `graph-run-file` let you pass custom graph paths via `GRAPH=...`.
 - Core pack discovery supports text and JSON formats via `robot-core graph-list-core --format <text|json>`.
 - Add `--verify-exists` to make graph discovery fail if a bundled config path goes missing.
+- Use `--verify-exists --format json` for machine-readable CI/script checks.
 - `make preflight` includes the core graph existence check before validation and tests.
 - `graph-run-core` is also available directly: `robot-core graph-run-core --output-dir logs`.

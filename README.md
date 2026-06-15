@@ -114,6 +114,7 @@ robot-core dashboard-demo --duration-s 5 --port 9120
 robot-core graph-list-core
 robot-core graph-list-core --format json
 robot-core graph-list-core --verify-exists
+robot-core graph-list-core --verify-exists --format json
 robot-core graph-validate deploy/config/graph_surveillance.yaml
 robot-core graph-validate-core
 robot-core run-graph deploy/config/graph_surveillance.yaml --output logs/graph_trace.jsonl

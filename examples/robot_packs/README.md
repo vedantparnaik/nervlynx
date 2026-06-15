@@ -42,6 +42,7 @@ make graph-list-core
 robot-core graph-list-core
 robot-core graph-list-core --format json
 robot-core graph-list-core --verify-exists
+robot-core graph-list-core --verify-exists --format json
 ```
 
 You can also execute all core packs and write traces to `logs/*_trace.jsonl`:
