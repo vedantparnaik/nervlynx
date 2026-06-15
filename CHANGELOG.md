@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make graph-validate-file GRAPH=<path>` and `make graph-run-file GRAPH=<path> GRAPH_OUTPUT=<path>` for custom graph iteration.
 - `robot-core graph-list-core --verify-exists` and `make graph-list-core-verify` for fast missing-pack detection.
 - CI now runs `robot-core graph-list-core --verify-exists` on Python 3.11 to fail fast on missing core pack files.
+- `make graph-list-core-verify-json` and JSON success coverage for `graph-list-core --verify-exists --format json`.
 
 ### Changed
 
@@ -78,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs now include parameterized graph Make targets for non-core packs.
 - Graph list docs now include existence verification usage for core pack files.
 - `make preflight` and docs now include core graph existence verification in the local gate.
+- Docs now include JSON verify usage for machine-readable graph existence checks.
 
 ## [0.2.0] - 2026-04-15
 
