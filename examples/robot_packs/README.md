@@ -45,6 +45,14 @@ robot-core graph-list-core --verify-exists
 robot-core graph-list-core --verify-exists --format json
 ```
 
+For a one-shot health check (files exist + configs validate):
+
+```bash
+make graph-doctor
+# or directly:
+robot-core graph-doctor
+```
+
 You can also execute all core packs and write traces to `logs/*_trace.jsonl`:
 
 ```bash

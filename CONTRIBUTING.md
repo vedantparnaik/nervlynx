@@ -28,6 +28,7 @@ python benchmarks/benchmark_runtime.py
 make graph-example   # optional: example graph via surveillance pack
 make graph-run-core  # optional: run bundled core graph packs end-to-end
 make graph-smoke     # optional: validate + run bundled core graph packs
+make graph-doctor    # optional: verify core pack files exist and validate configs
 make compile         # optional: byte-compile robot_core and shuttle
 make graph-validate  # optional: validate surveillance graph config + plugins
 make graph-validate-core  # optional: validate bundled core example packs

@@ -10,6 +10,7 @@ make test     # pytest
 make check    # test + compile (handy before push)
 make preflight  # core graph existence + validation + replay check + full local gate
 make graph-smoke  # core graph validation + core graph execution bundle
+make graph-doctor  # verify core pack files exist and validate configs
 make graph-validate  # validate surveillance graph structure and plugin refs
 make graph-validate-core  # validate bundled surveillance/delivery/warehouse packs
 make graph-validate-file GRAPH=examples/robot_packs/warehouse.yaml  # validate any graph file
@@ -47,4 +48,5 @@ ctest --test-dir cpp_core/build --output-on-failure
 - Add `--verify-exists` to make graph discovery fail if a bundled config path goes missing.
 - Use `--verify-exists --format json` for machine-readable CI/script checks.
 - `make preflight` includes the core graph existence check before validation and tests.
+- `make graph-doctor` / `robot-core graph-doctor` is a fast existence + validation health check for core packs.
 - `graph-run-core` is also available directly: `robot-core graph-run-core --output-dir logs`.
