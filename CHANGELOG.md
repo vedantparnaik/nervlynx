@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `robot-core graph-list-core --verify-exists` and `make graph-list-core-verify` for fast missing-pack detection.
 - CI now runs `robot-core graph-list-core --verify-exists` on Python 3.11 to fail fast on missing core pack files.
 - `make graph-list-core-verify-json` and JSON success coverage for `graph-list-core --verify-exists --format json`.
+- `robot-core graph-doctor` and `make graph-doctor` verify core pack files exist and validate their configs in one call.
 
 ### Changed
 
@@ -80,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graph list docs now include existence verification usage for core pack files.
 - `make preflight` and docs now include core graph existence verification in the local gate.
 - Docs now include JSON verify usage for machine-readable graph existence checks.
+- Development/contributing and robot-pack docs include `graph-doctor` health-check usage.
 
 ## [0.2.0] - 2026-04-15
 
