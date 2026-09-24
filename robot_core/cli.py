@@ -261,6 +261,22 @@ def graph_list_core(
       raise typer.Exit(code=1)
 
 
+@app.command("graph-doctor")
+def graph_doctor() -> None:
+  """Verify core pack files exist and validate their graph configs."""
+  missing_paths = [str(config) for config in CORE_GRAPH_CONFIGS if not config.exists()]
+  if missing_paths:
+    typer.echo(f"graph_doctor_ok=false missing={len(missing_paths)}")
+    for path in missing_paths:
+      typer.echo(f"missing: {path}")
+    raise typer.Exit(code=1)
+  reg = _build_plugin_registry()
+  if not _validate_graph_paths(CORE_GRAPH_CONFIGS, reg):
+    typer.echo("graph_doctor_ok=false validation_failed=true")
+    raise typer.Exit(code=1)
+  typer.echo(f"graph_doctor_ok=true packs={len(CORE_GRAPH_CONFIGS)}")
+
+
 @app.command("dashboard-demo")
 def dashboard_demo(duration_s: float = 5.0, port: int = 9120) -> None:
   runtime = PipelineRuntime()

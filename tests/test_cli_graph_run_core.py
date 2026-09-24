@@ -74,3 +74,20 @@ def test_graph_list_core_verify_exists_fails_for_missing_config(monkeypatch) -> 
   assert result.exit_code == 1
   assert '"all_exist": false' in result.stdout
   assert '"missing": ["examples/robot_packs/missing.yaml"]' in result.stdout
+
+
+def test_graph_doctor_reports_healthy_core_packs() -> None:
+  runner = CliRunner()
+  result = runner.invoke(app, ["graph-doctor"])
+  assert result.exit_code == 0
+  assert "graph_doctor_ok=true packs=3" in result.stdout
+  assert "graph_config_valid=true" in result.stdout
+
+
+def test_graph_doctor_fails_when_core_pack_missing(monkeypatch) -> None:
+  runner = CliRunner()
+  monkeypatch.setattr(cli, "CORE_GRAPH_CONFIGS", (Path("examples/robot_packs/missing.yaml"),))
+  result = runner.invoke(app, ["graph-doctor"])
+  assert result.exit_code == 1
+  assert "graph_doctor_ok=false missing=1" in result.stdout
+  assert "missing: examples/robot_packs/missing.yaml" in result.stdout
