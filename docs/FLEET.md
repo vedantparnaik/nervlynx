@@ -47,7 +47,9 @@ nodes:
 
 `fleet deploy` writes each robot's overlay to `overlay.yaml` on that robot. If the project
 uses the mesh, it also gives each robot its own `mesh.robot` name, so robots sharing a
-network never act on each other's messages. Each robot's `calibration.yaml` (from the
+network never act on each other's messages. When the project lists `devices:`, add
+`--device <name>` to `run_args` (per robot, or in `defaults`), since robot hostnames
+usually won't match the device names. Each robot's `calibration.yaml` (from the
 dashboard wizard) and its recorded runs stay on the robot and are never overwritten.
 
 ## Deploy
