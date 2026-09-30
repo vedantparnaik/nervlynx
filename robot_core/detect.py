@@ -4,7 +4,7 @@ A worker thread waits for each new frame from `frames(camera)` (a local camera, 
 shared from another device by the mesh), runs the model, and the node publishes the
 result on `detections.<camera>`:
 
-  {"seq": 812, "width": 640, "height": 480, "latency_ms": 23.1, "backend": "onnx",
+  {"seq": 812, "width": 640, "height": 480, "latency_ms": 23.1, "engine": "onnx",
    "model": "yolox-nano", "detections": [{"label": "person", "confidence": 0.87,
    "box": [x0, y0, x1, y1], "center": [cx, cy], "size": [w, h]}]}
 
@@ -12,7 +12,7 @@ Boxes are fractions of the image (x to the right, y down), so code works at any
 resolution. The executor never waits on the model: a slow model lowers the detection
 rate, never the control loop.
 
-Backends (`backend:`):
+Engines (`engine:`):
   onnx      ONNX Runtime on the CPU (pip install "nervlynx[ai]")
   tensorrt  ONNX Runtime's TensorRT execution provider on NVIDIA Jetson (install
             onnxruntime-gpu for your JetPack); engines are cached, so only the first
@@ -44,7 +44,7 @@ from typing import Any, Iterable, Sequence
 from robot_core.hardware import HardwareUnavailable, _importable
 from robot_core.live import LiveNode, NodeContext, Output
 
-BACKENDS = ("auto", "onnx", "tensorrt", "opencv", "hailo", "mock")
+ENGINES = ("auto", "onnx", "tensorrt", "opencv", "hailo", "mock")
 COCO_LABELS = (
   "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
   "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
@@ -256,7 +256,7 @@ def detection(label: str, confidence: float, x0: float, y0: float, x1: float, y1
   }
 
 
-# ---------------------------------------------------------------------------- backends
+# ---------------------------------------------------------------------------- engines
 
 
 class _YoloBackend:
@@ -312,7 +312,7 @@ class OnnxBackend(_YoloBackend):
     try:
       import onnxruntime as ort  # type: ignore[import-not-found]
     except ImportError as exc:
-      raise HardwareUnavailable(f"the onnx detector backend needs ONNX Runtime: {_AI_HINT}") from exc
+      raise HardwareUnavailable(f"the onnx detection engine needs ONNX Runtime: {_AI_HINT}") from exc
     options = ort.SessionOptions()
     if threads:
       options.intra_op_num_threads = int(threads)
@@ -339,7 +339,7 @@ class TensorRtBackend(OnnxBackend):
     super().__init__(model_path, labels, providers=providers, threads=threads)
     if "TensorrtExecutionProvider" not in self.providers:
       raise HardwareUnavailable(
-        "ONNX Runtime here has no TensorRT provider; install onnxruntime-gpu built for your JetPack, or use backend: onnx"
+        "ONNX Runtime here has no TensorRT provider; install onnxruntime-gpu built for your JetPack, or use engine: onnx"
       )
 
 
@@ -351,7 +351,7 @@ class OpenCvBackend(_YoloBackend):
     try:
       import cv2  # type: ignore[import-not-found]
     except ImportError as exc:
-      raise HardwareUnavailable("the opencv detector backend needs OpenCV: sudo apt install python3-opencv") from exc
+      raise HardwareUnavailable("the opencv detection engine needs OpenCV: sudo apt install python3-opencv") from exc
     self.net = cv2.dnn.readNetFromONNX(str(model_path))
     size = input_size or 416
     probe = self.net
@@ -374,7 +374,7 @@ class HailoBackend:
     try:
       from picamera2.devices import Hailo  # type: ignore[import-not-found]
     except ImportError as exc:
-      raise HardwareUnavailable("the hailo backend needs the Hailo software: sudo apt install hailo-all, then reboot") from exc
+      raise HardwareUnavailable("the hailo engine needs the Hailo software: sudo apt install hailo-all, then reboot") from exc
     self.labels = tuple(labels)
     self.device = Hailo(str(model_path))
     self.height, self.width = self.device.get_input_shape()[:2]
@@ -408,9 +408,9 @@ def _is_jetson() -> bool:
     return Path("/etc/nv_tegra_release").exists()
 
 
-def pick_backend(backend: str, model_path: Path | None) -> str:
-  if backend != "auto":
-    return backend
+def pick_engine(engine: str, model_path: Path | None) -> str:
+  if engine != "auto":
+    return engine
   if model_path is not None and model_path.suffix == ".hef":
     return "hailo"
   if _is_jetson() and _importable("onnxruntime"):
@@ -422,27 +422,27 @@ def pick_backend(backend: str, model_path: Path | None) -> str:
     return "onnx"
   if _importable("cv2"):
     return "opencv"
-  raise HardwareUnavailable(f"no detector backend available here: {_AI_HINT}")
+  raise HardwareUnavailable(f"no detection engine available here: {_AI_HINT}")
 
 
-def create_backend(backend: str, model_path: Path | None, labels: Sequence[str], *, threads: int | None = None, input_size: int | None = None) -> Any:
-  if backend == "mock":
+def create_engine(engine: str, model_path: Path | None, labels: Sequence[str], *, threads: int | None = None, input_size: int | None = None) -> Any:
+  if engine == "mock":
     return MockBackend()
   if model_path is None:
     raise HardwareUnavailable("no model to run")
-  if backend == "hailo" or model_path.suffix == ".hef":
-    if backend not in ("hailo", "auto"):
-      raise HardwareUnavailable(f"{model_path.name} is a Hailo model; use backend: hailo")
+  if engine == "hailo" or model_path.suffix == ".hef":
+    if engine not in ("hailo", "auto"):
+      raise HardwareUnavailable(f"{model_path.name} is a Hailo model; use engine: hailo")
     return HailoBackend(model_path, labels)
   if not _importable("numpy"):
     raise HardwareUnavailable(f"the detector needs numpy: {_AI_HINT}")
-  if backend == "onnx":
+  if engine == "onnx":
     return OnnxBackend(model_path, labels, threads=threads)
-  if backend == "tensorrt":
+  if engine == "tensorrt":
     return TensorRtBackend(model_path, labels, threads=threads)
-  if backend == "opencv":
+  if engine == "opencv":
     return OpenCvBackend(model_path, labels, input_size=input_size)
-  raise ValueError(f"unknown detector backend {backend!r}")
+  raise ValueError(f"unknown detection engine {engine!r}")
 
 
 # ---------------------------------------------------------------------------- node
@@ -457,7 +457,7 @@ class Detector(LiveNode):
     self,
     *,
     camera: str = "front",
-    backend: str = "auto",
+    engine: str = "auto",
     model: str = "yolox-nano",
     labels: list[str] | None = None,
     min_confidence: float = 0.5,
@@ -471,8 +471,8 @@ class Detector(LiveNode):
   ) -> None:
     """`labels` keeps only these classes (default: all); `class_names` replaces the COCO
     names for a custom model."""
-    if backend not in BACKENDS:
-      raise ValueError(f"backend must be one of {', '.join(BACKENDS)}")
+    if engine not in ENGINES:
+      raise ValueError(f"engine must be one of {', '.join(ENGINES)}")
     if not 0 < min_confidence < 1 or not 0 < iou_threshold < 1:
       raise ValueError("min_confidence and iou_threshold must be between 0 and 1")
     if not 0 < max_fps <= 60:
@@ -482,7 +482,7 @@ class Detector(LiveNode):
     if unknown:
       raise ValueError(f"labels not in the model's classes: {', '.join(unknown)}")
     self.camera = camera
-    self.backend_name = backend
+    self.engine_name = engine
     self.model = model
     self.labels = frozenset(labels) if labels else None
     self.class_names = names
@@ -493,8 +493,8 @@ class Detector(LiveNode):
     self.download = bool(download)
     self.threads = threads
     self.input_size = input_size
-    self.active_backend: str | None = None
-    self._backend: Any = None
+    self.active_engine: str | None = None
+    self._engine: Any = None
     self._lock = threading.Lock()
     self._stop = threading.Event()
     self._thread: threading.Thread | None = None
@@ -508,11 +508,11 @@ class Detector(LiveNode):
     self._missing_reported = False
 
   def setup(self, ctx: NodeContext) -> None:
-    model_path = None if self.backend_name == "mock" else resolve_model(self.model, download=self.download)
-    self.active_backend = pick_backend(self.backend_name, model_path)
-    self._backend = create_backend(self.active_backend, model_path, self.class_names, threads=self.threads, input_size=self.input_size)
-    if self.backend_name == "auto":
-      ctx.fault(f"detector backend auto resolved to {self.active_backend}", severity="info", kind="detector")
+    model_path = None if self.engine_name == "mock" else resolve_model(self.model, download=self.download)
+    self.active_engine = pick_engine(self.engine_name, model_path)
+    self._engine = create_engine(self.active_engine, model_path, self.class_names, threads=self.threads, input_size=self.input_size)
+    if self.engine_name == "auto":
+      ctx.fault(f"detection engine auto resolved to {self.active_engine}", severity="info", kind="detector")
     self._thread = threading.Thread(target=self._work, name=f"nervlynx-detector-{self.camera}", daemon=True)
     self._thread.start()
 
@@ -535,8 +535,8 @@ class Detector(LiveNode):
       last = now
       started = time.perf_counter()
       try:
-        image = decode_image(frame.data) if self.active_backend != "mock" else None
-        found = self._backend.detect(image, min_confidence=self.min_confidence, iou_threshold=self.iou_threshold)
+        image = decode_image(frame.data) if self.active_engine != "mock" else None
+        found = self._engine.detect(image, min_confidence=self.min_confidence, iou_threshold=self.iou_threshold)
       except Exception as exc:  # noqa: BLE001 - reported from the executor thread
         self._error = f"{type(exc).__name__}: {exc}"
         self._stop.wait(1.0)
@@ -549,8 +549,8 @@ class Detector(LiveNode):
         "width": frame.width,
         "height": frame.height,
         "latency_ms": round(latency, 2),
-        "backend": self.active_backend,
-        "model": Path(self.model).stem if self.active_backend != "mock" else "mock",
+        "engine": self.active_engine,
+        "model": Path(self.model).stem if self.active_engine != "mock" else "mock",
         "detections": found,
       }
       with self._lock:
@@ -584,11 +584,11 @@ class Detector(LiveNode):
     self._stop.set()
     if self._thread is not None:
       self._thread.join(timeout=2.0)
-    close = getattr(self._backend, "close", None)
+    close = getattr(self._engine, "close", None)
     if close is not None:
       close()
     # Free the model now: some runtimes abort if their sessions outlive interpreter shutdown.
-    self._backend = None
+    self._engine = None
 
   def status(self) -> dict[str, Any]:
     with self._lock:
@@ -597,7 +597,7 @@ class Detector(LiveNode):
     ordered = sorted(latencies)
     return {
       "detector": self.camera,
-      "backend": self.active_backend or self.backend_name,
+      "engine": self.active_engine or self.engine_name,
       "model": self.model,
       "fps": round(fps, 2),
       "latency_ms_p50": round(ordered[len(ordered) // 2], 2) if ordered else None,

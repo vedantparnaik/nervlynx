@@ -546,7 +546,7 @@ class SkidSteerSim(LiveNode):
       "width": spec["width"],
       "height": spec["height"],
       "latency_ms": 0.0,
-      "backend": "sim",
+      "engine": "sim",
       "model": "sim",
       "detections": found,
     }

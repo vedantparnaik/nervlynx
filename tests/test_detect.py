@@ -101,9 +101,9 @@ class FixedBackend:
 def test_the_node_runs_the_model_off_the_executor_and_filters_labels(monkeypatch) -> None:
   backend = FixedBackend()
   monkeypatch.setattr(detect, "resolve_model", lambda model, download=True: Path("/models/x.onnx"))
-  monkeypatch.setattr(detect, "create_backend", lambda *a, **k: backend)
+  monkeypatch.setattr(detect, "create_engine", lambda *a, **k: backend)
   monkeypatch.setattr(detect, "decode_image", lambda data: np.zeros((48, 64, 3), dtype=np.uint8))
-  node = Detector(camera="bench", backend="onnx", labels=["person"], max_fps=60)
+  node = Detector(camera="bench", engine="onnx", labels=["person"], max_fps=60)
   buffer = register_frames("bench", FrameBuffer())
   rt = LiveRuntime(clock=SimulatedClock(), seed=1)
   rt.add_node("detector", node)
@@ -119,7 +119,7 @@ def test_the_node_runs_the_model_off_the_executor_and_filters_labels(monkeypatch
       time.sleep(0.005)
     payload = seen[0].payload
     assert payload["detections"] == [detection("person", 0.9, 0.4, 0.2, 0.6, 0.9)]
-    assert (payload["width"], payload["height"], payload["backend"]) == (64, 48, "onnx")
+    assert (payload["width"], payload["height"], payload["engine"]) == (64, 48, "onnx")
     assert node.status()["found"] == ["person"]
   finally:
     rt.shutdown()
@@ -127,7 +127,7 @@ def test_the_node_runs_the_model_off_the_executor_and_filters_labels(monkeypatch
 
 
 def test_a_detector_without_frames_says_where_to_look(monkeypatch) -> None:
-  node = Detector(camera="nowhere", backend="mock")
+  node = Detector(camera="nowhere", engine="mock")
   rt = LiveRuntime(clock=SimulatedClock(), seed=1)
   rt.add_node("detector", node)
   rt.start()

@@ -70,6 +70,20 @@ def test_lazy_factories_look_like_the_class_they_wrap() -> None:
     LazyFactory("robot_core.sensors")
 
 
+def test_backend_params_always_mean_the_hardware_backend() -> None:
+  import inspect
+
+  from robot_core.hardware import BACKENDS
+  from robot_core.live_config import LIVE_BUILTINS
+  from robot_core.plugins import LazyFactory
+
+  # hardware.backend is passed to every node with a `backend` parameter, so none may use it for anything else.
+  for name, path in LIVE_BUILTINS.items():
+    param = inspect.signature(LazyFactory(path)).parameters.get("backend")
+    if param is not None:
+      assert param.default in BACKENDS, f"{name}: backend={param.default!r} is not a hardware backend"
+
+
 def test_zmq_transport_explains_the_missing_extra(monkeypatch) -> None:
   monkeypatch.setitem(sys.modules, "zmq", None)
   with pytest.raises(ModuleNotFoundError, match=r"nervlynx\[zmq\]"):

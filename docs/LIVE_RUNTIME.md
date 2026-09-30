@@ -421,7 +421,7 @@ Object detection on a camera's frames. A worker thread takes each new frame from
 mesh), runs the model, and the node publishes on `detections.<camera>`:
 
 ```json
-{"seq": 812, "width": 640, "height": 480, "latency_ms": 23.1, "backend": "onnx", "model": "yolox-nano",
+{"seq": 812, "width": 640, "height": 480, "latency_ms": 23.1, "engine": "onnx", "model": "yolox-nano",
  "detections": [{"label": "person", "confidence": 0.87, "box": [0.43, 0.13, 0.77, 0.91],
                  "center": [0.6, 0.52], "size": [0.34, 0.78]}]}
 ```
@@ -433,7 +433,7 @@ control loop.
 | Param | Default | Meaning |
 | --- | --- | --- |
 | `camera` | `front` | Which camera's frames to read |
-| `backend` | `auto` | `onnx` (ONNX Runtime on the CPU), `tensorrt` (ONNX Runtime's TensorRT provider on a Jetson; engines are cached after the first start), `opencv` (OpenCV DNN), `hailo` (Raspberry Pi AI Kit / AI HAT+ with a `.hef` model), `auto`, or `mock` |
+| `engine` | `auto` | `onnx` (ONNX Runtime on the CPU), `tensorrt` (ONNX Runtime's TensorRT provider on a Jetson; engines are cached after the first start), `opencv` (OpenCV DNN), `hailo` (Raspberry Pi AI Kit / AI HAT+ with a `.hef` model), `auto`, or `mock` |
 | `model` | `yolox-nano` | `yolox-nano` or `yolox-tiny` (Apache-2.0, downloaded once and checksum-checked), a `.onnx` path (YOLOX or YOLOv8/YOLO11 exports), or a `.hef` path or name from `/usr/share/hailo-models` |
 | `labels` | all | Only report these classes, e.g. `[person]` |
 | `min_confidence` / `iou_threshold` | 0.5 / 0.45 | Detection threshold and overlap suppression |
@@ -444,7 +444,7 @@ control loop.
 Install with `pip install "nervlynx[ai]"` (numpy, ONNX Runtime, Pillow; OpenCV is used for
 decoding when present). `nervlynx models` lists the named models and whether they are
 downloaded. On a Pi 5 CPU, yolox-nano runs at several frames a second; on an Orin NX use
-`backend: tensorrt`, and to run it on the Orin while the camera is on the Pi, place the
+`engine: tensorrt`, and to run it on the Orin while the camera is on the Pi, place the
 detector there and share the camera with `mesh.frames` (see [MESH.md](MESH.md)). The
 simulator publishes the same payload from its world (`skid_steer_sim` `cameras:`). The
 Hailo and TensorRT backends have not been run on that hardware yet.

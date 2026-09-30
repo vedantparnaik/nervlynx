@@ -53,7 +53,7 @@ def test_the_simulated_camera_sees_people_like_the_detector_does() -> None:
   rt, sim, seen = camera_sim([{"label": "person", "at": [4.0, 2.0]}, {"label": "dog", "at": [1.0, 2.9]}])
   rt.run(duration_s=0.5)
   payload = seen[-1].payload
-  assert payload["backend"] == "sim" and (payload["width"], payload["height"]) == (640, 480)
+  assert payload["engine"] == "sim" and (payload["width"], payload["height"]) == (640, 480)
   assert [d["label"] for d in payload["detections"]] == ["person"]  # the dog is outside the field of view
   person = payload["detections"][0]
   assert person["center"][0] < 0.5  # to the left of centre, as the target is to the robot's left
