@@ -46,4 +46,4 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["shuttle*", "robot_core*"]
+include = ["shuttle*", "robot_core*", "nervlynx*"]

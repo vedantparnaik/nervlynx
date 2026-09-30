@@ -114,6 +114,12 @@ class NodeContext:
   def estop_engaged(self) -> bool:
     return self._runtime.estop_engaged
 
+  @property
+  def rate_hz(self) -> float | None:
+    """This node's tick rate, or None when it only reacts to messages."""
+    slot = self._runtime._slots.get(self.name)
+    return 1e9 / slot.period_ns if slot is not None and slot.period_ns else None
+
   def publish(self, topic: str, schema: str, payload: dict[str, Any], *, trace_id: str | None = None) -> RuntimeMessage:
     """Publish now. Inside `on_message` the current trace is continued unless `trace_id` is given."""
     return self._runtime._emit(self.name, topic, schema, payload, trace_id or self._current_trace)
@@ -359,6 +365,8 @@ class LiveRuntime(PipelineRuntime):
       raise LiveRuntimeError("nodes must be added before the runtime starts")
     if name in self._slots:
       raise LiveRuntimeError(f"duplicate node name: {name}")
+    if rate_hz is None:
+      rate_hz = getattr(node, "rate_hz", None)
     if rate_hz is not None and rate_hz <= 0:
       raise LiveRuntimeError(f"node {name}: rate_hz must be > 0")
     topics = tuple(input_topics) if input_topics is not None else tuple(node.input_topics)
