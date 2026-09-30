@@ -8,25 +8,21 @@ from typing import Any, Callable
 
 import yaml
 
-from robot_core.camera import CameraNode
-from robot_core.drive import SkidSteerDrive
 from robot_core.hardware import BACKENDS
-from robot_core.link import Esp32Link
 from robot_core.live import ESTOP_TOPIC, LiveNode, LiveRuntime, PluginNodeAdapter, SensorSourceNode
 from robot_core.metrics import MetricsRegistry
-from robot_core.plugins import PluginRegistry
+from robot_core.plugins import LazyFactory, PluginRegistry
 from robot_core.runtime import Clock, SimulatedClock, SystemClock
-from robot_core.sensors import HCSR04Range, MPU6050Imu
-from robot_core.sim import ScriptedDriveSource, SkidSteerSim
 
-LIVE_BUILTINS: dict[str, Callable[..., LiveNode]] = {
-  "skid_steer_drive": SkidSteerDrive,
-  "scripted_drive": ScriptedDriveSource,
-  "skid_steer_sim": SkidSteerSim,
-  "hcsr04_range": HCSR04Range,
-  "mpu6050_imu": MPU6050Imu,
-  "camera": CameraNode,
-  "esp32_link": Esp32Link,
+# Imported only when a config uses them.
+LIVE_BUILTINS: dict[str, str] = {
+  "skid_steer_drive": "robot_core.drive:SkidSteerDrive",
+  "scripted_drive": "robot_core.sim:ScriptedDriveSource",
+  "skid_steer_sim": "robot_core.sim:SkidSteerSim",
+  "hcsr04_range": "robot_core.sensors:HCSR04Range",
+  "mpu6050_imu": "robot_core.sensors:MPU6050Imu",
+  "camera": "robot_core.camera:CameraNode",
+  "esp32_link": "robot_core.link:Esp32Link",
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes"}
@@ -63,8 +59,8 @@ def uses_modes(cfg: dict[str, Any]) -> bool:
 
 
 def register_live_builtins(registry: PluginRegistry) -> None:
-  for name, factory in LIVE_BUILTINS.items():
-    registry.register_live_node(name, factory)
+  for name, path in LIVE_BUILTINS.items():
+    registry.register_live_node(name, LazyFactory(path))
 
 
 def load_live_config(path: str | Path) -> dict[str, Any]:

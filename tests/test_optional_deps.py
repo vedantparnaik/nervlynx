@@ -40,6 +40,36 @@ def test_importing_nervlynx_stays_light_for_small_boards() -> None:
   assert int(result.stdout.split("robot_core=")[1]) <= 6
 
 
+def test_a_config_imports_only_the_drivers_it_uses() -> None:
+  script = "\n".join(
+    [
+      "import sys",
+      "from robot_core.live_config import build_live_runtime, load_live_config",
+      "from robot_core.project import build_registry",
+      "from robot_core.runtime import SimulatedClock",
+      "reg = build_registry()",
+      "assert reg.has_live_node('camera') and reg.has_live_node('esp32_link')",
+      "build_live_runtime(load_live_config('examples/live/rover_sim.yaml'), reg, clock=SimulatedClock())",
+      "print('loaded=' + ','.join(m for m in ('robot_core.camera', 'robot_core.link', 'robot_core.sensors') if m in sys.modules))",
+    ]
+  )
+  result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
+  assert "loaded=\n" in result.stdout
+
+
+def test_lazy_factories_look_like_the_class_they_wrap() -> None:
+  import inspect
+
+  from robot_core.plugins import LazyFactory
+  from robot_core.sensors import HCSR04Range
+
+  factory = LazyFactory("robot_core.sensors:HCSR04Range")
+  assert "backend" in inspect.signature(factory).parameters
+  assert isinstance(factory(trigger=23, echo=24), HCSR04Range)
+  with pytest.raises(ValueError, match="package.module:Name"):
+    LazyFactory("robot_core.sensors")
+
+
 def test_zmq_transport_explains_the_missing_extra(monkeypatch) -> None:
   monkeypatch.setitem(sys.modules, "zmq", None)
   with pytest.raises(ModuleNotFoundError, match=r"nervlynx\[zmq\]"):

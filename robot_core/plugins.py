@@ -1,10 +1,43 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass, field
+from importlib import import_module
 from importlib.metadata import entry_points
 from typing import Any, Callable, Protocol
 
 from robot_core.runtime import RuntimeMessage
+
+
+class LazyFactory:
+  """A live-node factory named "module:attr", imported the first time it is used.
+
+  Built-in drivers register this way so a robot only imports the drivers its config
+  names, which keeps start-up fast on small boards.
+  """
+
+  def __init__(self, path: str) -> None:
+    module, _, attr = path.partition(":")
+    if not module or not attr:
+      raise ValueError(f"lazy factory path must look like 'package.module:Name', got {path!r}")
+    self.path = path
+    self._target: Callable[..., Any] | None = None
+
+  def resolve(self) -> Callable[..., Any]:
+    if self._target is None:
+      module, _, attr = self.path.partition(":")
+      self._target = getattr(import_module(module), attr)
+    return self._target
+
+  @property
+  def __signature__(self) -> inspect.Signature:
+    return inspect.signature(self.resolve())
+
+  def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    return self.resolve()(*args, **kwargs)
+
+  def __repr__(self) -> str:
+    return f"LazyFactory({self.path!r})"
 
 
 class SensorPlugin(Protocol):
