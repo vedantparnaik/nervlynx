@@ -76,9 +76,24 @@ def test_scan_reports_usb_serial_cameras_and_closes_the_bus() -> None:
   found, notes = scan(pi_with_usb(), open_bus=lambda n: bus)
   by_where = {item.where: item for item in found}
   assert notes == [] and bus.closed
-  assert by_where["/dev/ttyUSB0"].name.startswith("CP210x USB-serial") and by_where["/dev/ttyUSB0"].note == "USB id 10c4:ea60"
+  assert by_where["/dev/ttyUSB0"].name.startswith("CP210x USB-serial") and by_where["/dev/ttyUSB0"].note.startswith("USB id 10c4:ea60; a LiDAR is")
   assert by_where["/dev/ttyACM0"].name == "ESP32 with native USB (S2/S3/C3)"
   assert by_where["imx708"].node == "camera"
+
+
+def test_servo_boards_and_gps_receivers_get_nodes_that_validate() -> None:
+  from robot_core.live_config import validate_live_config
+  from robot_core.project import build_registry
+
+  files = {"/proc/device-tree/model": PI5_MODEL, "/sys/class/tty/ttyACM0/idVendor": "1546\n", "/sys/class/tty/ttyACM0/idProduct": "01a8\n"}
+  system = FakeSystem(files=files, devices=("/dev/i2c-1", "/dev/ttyACM0"), commands={})
+  found, _ = scan(system, open_bus=lambda n: FakeI2C({0x40: {0x00: 0x11}}))
+  nodes = yaml.safe_load(draft_nodes_yaml(found))
+  assert nodes == [
+    {"plugin": "pca9685_servos", "params": {"address": 0x40, "servos": [{"name": "servo0", "channel": 0}]}},
+    {"plugin": "gps_nmea", "params": {"port": "/dev/ttyACM0"}},
+  ]
+  assert validate_live_config({"nodes": nodes}, build_registry()) == []
 
 
 def test_scan_explains_why_i2c_was_skipped() -> None:

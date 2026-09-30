@@ -68,7 +68,8 @@ def _identify_i2c(bus: I2CBus, address: int) -> Found:
   if address == 0x40:
     mode1 = _reg(bus, address, 0x00)
     if mode1 is not None and (mode1 & 0xEF) in (0x01, 0x21, 0x00):
-      return Found("i2c", where, "PCA9685 16-channel PWM/servo driver (likely)", note="no built-in node yet")
+      servos = [{"name": "servo0", "channel": 0}]
+      return Found("i2c", where, "PCA9685 16-channel PWM/servo driver (likely)", "pca9685_servos", {"address": address, "servos": servos})
     return Found("i2c", where, "INA219 current sensor or PCA9685 servo driver")
   if address in (0x3C, 0x3D):
     return Found("i2c", where, "SSD1306 OLED display (likely)", note="no built-in node yet")
@@ -95,17 +96,23 @@ def scan_i2c(bus: I2CBus) -> list[Found]:
 
 
 _USB_IDS: dict[str, tuple[str, str | None]] = {
-  "10c4:ea60": ("CP210x USB-serial: an RPLidar, an ESP32 dev board, or another adapter", None),
+  "10c4:ea60": ("CP210x USB-serial: an RPLidar or LD19 LiDAR, an ESP32 dev board, or another adapter", None),
   "1a86:7523": ("CH340 USB-serial: usually an Arduino or ESP32/ESP8266 clone", None),
   "1a86:55d4": ("CH9102 USB-serial: usually an ESP32 dev board", None),
   "0403:6001": ("FTDI FT232 USB-serial adapter", None),
-  "067b:2303": ("PL2303 USB-serial: often a GPS module", None),
+  "067b:2303": ("PL2303 USB-serial: often a GPS module", "gps_nmea"),
   "303a:1001": ("ESP32 with native USB (S2/S3/C3)", None),
   "2e8a:0005": ("Raspberry Pi Pico (MicroPython)", None),
   "2e8a:000a": ("Raspberry Pi Pico (C/C++ SDK serial)", None),
-  "1546:01a7": ("u-blox 7 GPS", None),
-  "1546:01a8": ("u-blox 8 GPS", None),
-  "1546:01a9": ("u-blox 9 GPS", None),
+  "1546:01a7": ("u-blox 7 GPS", "gps_nmea"),
+  "1546:01a8": ("u-blox 8 GPS", "gps_nmea"),
+  "1546:01a9": ("u-blox 9 GPS", "gps_nmea"),
+}
+_USB_NOTES = {
+  "10c4:ea60": "a LiDAR is `plugin: lidar` with model: ld19 or rplidar; an ESP32 running NervLynx Link is `plugin: esp32_link`",
+  "1a86:7523": "flashed with NervLynx Link it is `plugin: esp32_link`",
+  "1a86:55d4": "flashed with NervLynx Link it is `plugin: esp32_link`",
+  "303a:1001": "flashed with NervLynx Link it is `plugin: esp32_link`",
 }
 
 
@@ -125,7 +132,10 @@ def scan_usb_serial(system: System) -> list[Found]:
     tty = Path(path).name
     usb_id = _usb_id(system, tty)
     name, node = _USB_IDS.get(usb_id or "", (f"USB serial device ({usb_id or 'unknown id'})", None))
-    found.append(Found("usb", path, name, node, note=f"USB id {usb_id}" if usb_id else None))
+    note = f"USB id {usb_id}" if usb_id else None
+    if usb_id in _USB_NOTES:
+      note = f"{note}; {_USB_NOTES[usb_id]}"
+    found.append(Found("usb", path, name, node, {"port": path} if node else None, note))
   return found
 
 
@@ -190,4 +200,8 @@ def _yaml_value(key: str, value: Any) -> str:
     return f"0x{value:02x}"
   if isinstance(value, bool):
     return "true" if value else "false"
+  if isinstance(value, dict):
+    return "{" + ", ".join(f"{k}: {_yaml_value(k, v)}" for k, v in value.items()) + "}"
+  if isinstance(value, list):
+    return "[" + ", ".join(_yaml_value(key, v) for v in value) + "]"
   return str(value)
