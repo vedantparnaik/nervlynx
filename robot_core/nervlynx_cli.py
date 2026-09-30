@@ -442,6 +442,87 @@ def pull_cmd(
   raise typer.Exit(code=code)
 
 
+fleet_app = typer.Typer(help="Deploy one project to many robots (fleet.yaml), check them, and roll back.")
+app.add_typer(fleet_app, name="fleet")
+_ROBOTS_OPTION = typer.Option(None, "--robots", help="Only these robots, comma-separated (default: all in fleet.yaml).")
+
+
+def _fleet(project: Path, robots: Optional[str], **kwargs):
+  from robot_core.fleet import Fleet, load_fleet, select
+  from robot_core.remote import RemoteError
+
+  try:
+    chosen = select(load_fleet(project), robots)
+  except RemoteError as exc:
+    typer.echo(f"fleet_error: {exc}")
+    raise typer.Exit(code=2)
+  return Fleet(project, chosen, echo=typer.echo, **kwargs)
+
+
+def _fleet_done(results: list) -> None:
+  from robot_core.fleet import render
+
+  typer.echo("\n" + render(results))
+  raise typer.Exit(code=0 if all(r.get("ok") for r in results) else 1)
+
+
+@fleet_app.command("list")
+def fleet_list(project: Path = typer.Option(Path("."), "--project", help="Project folder with robot.yaml and fleet.yaml.")) -> None:
+  """List the robots in fleet.yaml (no network)."""
+  fleet = _fleet(project, None)
+  for robot in fleet.robots:
+    overlay = f"  overlay {robot.overlay.relative_to(project)}" if robot.overlay else ""
+    typer.echo(f"  {robot.name:<16} {robot.host}{overlay}")
+
+
+@fleet_app.command("deploy")
+def fleet_deploy(
+  project: Path = typer.Option(Path("."), "--project", help="Project folder with robot.yaml and fleet.yaml."),
+  robots: Optional[str] = _ROBOTS_OPTION,
+  no_rollback: bool = typer.Option(False, "--no-rollback", help="Leave a robot on the new release even if it comes up unhealthy."),
+  parallel: int = typer.Option(4, "--parallel", help="How many robots to work on at once."),
+  health_timeout_s: float = typer.Option(20.0, "--health-timeout-s", help="How long a restarted robot has to report healthy."),
+) -> None:
+  """Copy the project to every robot, restart it, and roll back any robot that comes up unhealthy."""
+  if not (project / "robot.yaml").exists():
+    typer.echo(f"fleet_error: {project} has no robot.yaml")
+    raise typer.Exit(code=2)
+  _fleet_done(_fleet(project, robots, parallel=parallel, health_timeout_s=health_timeout_s).deploy(rollback=not no_rollback))
+
+
+@fleet_app.command("status")
+def fleet_status(
+  project: Path = typer.Option(Path("."), "--project", help="Project folder with fleet.yaml."),
+  robots: Optional[str] = _ROBOTS_OPTION,
+) -> None:
+  """Show each robot's service, health, release, and NervLynx version."""
+  _fleet_done(_fleet(project, robots).status())
+
+
+@fleet_app.command("rollback")
+def fleet_rollback(
+  project: Path = typer.Option(Path("."), "--project", help="Project folder with fleet.yaml."),
+  robots: Optional[str] = _ROBOTS_OPTION,
+  to: Optional[str] = typer.Option(None, "--to", help="Release id to go back to (default: the one before the current)."),
+) -> None:
+  """Put robots back on an earlier release (kept on each robot by fleet deploy)."""
+  _fleet_done(_fleet(project, robots).rollback(to))
+
+
+@fleet_app.command("upgrade")
+def fleet_upgrade(
+  project: Path = typer.Option(Path("."), "--project", help="Project folder with fleet.yaml."),
+  robots: Optional[str] = _ROBOTS_OPTION,
+  ref: str = typer.Option("main", "--ref", help="Branch, tag, or commit of NervLynx to install."),
+  extras: str = typer.Option("", "--extras", help="Extras to include, e.g. ai,mesh."),
+  spec: Optional[str] = typer.Option(None, "--spec", help="Exact pip requirement to install instead."),
+) -> None:
+  """Update NervLynx itself on every robot over the air, then restart and check each one."""
+  suffix = f"[{extras}]" if extras else ""
+  requirement = spec or f"nervlynx{suffix} @ git+https://github.com/vedantparnaik/nervlynx@{ref}"
+  _fleet_done(_fleet(project, robots).upgrade(requirement))
+
+
 @app.command("scan")
 def scan_cmd(
   bus: int = typer.Option(1, "--bus", help="I2C bus number (1 on a Raspberry Pi)."),
