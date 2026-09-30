@@ -2,8 +2,11 @@
 
 Backends:
   mock      in-memory pins; the default everywhere and what tests and simulations use
-  rpi_gpio  RPi.GPIO software PWM (Raspberry Pi)
-  gpiozero  gpiozero PWMOutputDevice / DigitalOutputDevice (Raspberry Pi)
+  rpi_gpio  RPi.GPIO software PWM (Raspberry Pi 4 and older)
+  gpiozero  gpiozero PWMOutputDevice / DigitalOutputDevice (any Raspberry Pi, lgpio on Pi 5)
+  auto      gpiozero on a Raspberry Pi (RPi.GPIO if gpiozero is missing and the board
+            supports it), mock on any other machine, so one config runs in simulation
+            and on the robot
 
 Pins are BCM numbers. Duty cycles are 0..1 and motor speeds are -1..1. Every backend call
 is serialised by a lock so `hard_stop()` can run from another thread.
@@ -11,15 +14,73 @@ is serialised by a lock so `hard_stop()` can run from another thread.
 
 from __future__ import annotations
 
+import importlib.util
+import re
 import threading
-from typing import Any, Iterable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Iterable
 
-BACKENDS = ("mock", "rpi_gpio", "gpiozero")
+BACKENDS = ("mock", "rpi_gpio", "gpiozero", "auto")
 DRIVERS = ("bts7960", "tb6612")
+DEVICE_TREE_MODEL = Path("/proc/device-tree/model")
+_RP1_MODEL = re.compile(r"Raspberry Pi (?:5|500)\b|Compute Module 5\b")
+_GPIO_INSTALL_HINT = "sudo apt install python3-gpiozero python3-lgpio (a virtualenv needs --system-site-packages to see them)"
 
 
 class HardwareUnavailable(RuntimeError):
   pass
+
+
+@dataclass(frozen=True)
+class BoardInfo:
+  model: str | None
+
+  @property
+  def is_raspberry_pi(self) -> bool:
+    return bool(self.model) and self.model.startswith("Raspberry Pi")
+
+  @property
+  def has_rp1(self) -> bool:
+    """Pi 5-family boards drive GPIO through the RP1 chip, which RPi.GPIO cannot access."""
+    return bool(self.model) and bool(_RP1_MODEL.search(self.model))
+
+
+def detect_board(model_path: Path = DEVICE_TREE_MODEL) -> BoardInfo:
+  try:
+    raw = model_path.read_bytes()
+  except OSError:
+    return BoardInfo(model=None)
+  model = raw.split(b"\x00", 1)[0].decode("utf-8", "replace").strip()
+  return BoardInfo(model=model or None)
+
+
+def _importable(module: str) -> bool:
+  try:
+    return importlib.util.find_spec(module) is not None
+  except (ImportError, ValueError):
+    return False
+
+
+def resolve_backend(
+  name: str,
+  *,
+  board: BoardInfo | None = None,
+  importable: Callable[[str], bool] = _importable,
+) -> str:
+  """Turn `auto` into a concrete backend for this machine; other names pass through."""
+  if name != "auto":
+    return name
+  board = board if board is not None else detect_board()
+  if not board.is_raspberry_pi:
+    return "mock"
+  if importable("gpiozero"):
+    return "gpiozero"
+  if board.has_rp1:
+    raise HardwareUnavailable(f"{board.model} needs gpiozero with lgpio (RPi.GPIO does not support it): {_GPIO_INSTALL_HINT}")
+  if importable("RPi.GPIO"):
+    return "rpi_gpio"
+  raise HardwareUnavailable(f"no GPIO library found on {board.model}: {_GPIO_INSTALL_HINT}")
 
 
 class PinBackend:
@@ -181,12 +242,13 @@ class GpiozeroBackend(PinBackend):
       self._digital.clear()
 
 
-def create_backend(name: str) -> PinBackend:
-  if name == "mock":
+def create_backend(name: str, *, board: BoardInfo | None = None) -> PinBackend:
+  resolved = resolve_backend(name, board=board)
+  if resolved == "mock":
     return MockBackend()
-  if name == "rpi_gpio":
+  if resolved == "rpi_gpio":
     return RPiGpioBackend()
-  if name == "gpiozero":
+  if resolved == "gpiozero":
     return GpiozeroBackend()
   raise ValueError(f"unknown hardware backend {name!r}; expected one of {', '.join(BACKENDS)}")
 

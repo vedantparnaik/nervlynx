@@ -92,7 +92,7 @@ def test_validation_reports_useful_errors(reg: PluginRegistry) -> None:
     "runtime.breaker.threshold must be an integer >= 0",
     "runtime.max_queue_size must be a positive integer",
     "safety.estop_on_stale must be true or false",
-    "hardware.backend must be one of mock, rpi_gpio, gpiozero",
+    "hardware.backend must be one of mock, rpi_gpio, gpiozero, auto",
     "nodes[0] (a).rate_hz must be a positive number",
     "nodes[0] (a): steps must be a non-empty list",
     "nodes[1] (a): duplicate node name",

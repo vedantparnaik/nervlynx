@@ -402,7 +402,7 @@ def run_live(
   config: Path = typer.Argument(..., help="Live graph YAML, e.g. examples/live/rover_sim.yaml."),
   duration_s: Optional[float] = typer.Option(None, "--duration-s", help="Stop after this much runtime-clock time (default: until Ctrl-C)."),
   sim_time: bool = typer.Option(False, "--sim-time", help="Simulated clock: runs as fast as possible and is deterministic."),
-  backend: Optional[str] = typer.Option(None, "--backend", help="Override the hardware backend of every node: mock, rpi_gpio, gpiozero."),
+  backend: Optional[str] = typer.Option(None, "--backend", help="Override the hardware backend of every node: mock, rpi_gpio, gpiozero, auto."),
   host: str = typer.Option("127.0.0.1", "--host", help="Dashboard bind address. Use 0.0.0.0 to reach it from another machine."),
   port: int = typer.Option(9120, "--port", help="Dashboard / metrics port."),
   no_server: bool = typer.Option(False, "--no-server", help="Do not start the HTTP dashboard."),

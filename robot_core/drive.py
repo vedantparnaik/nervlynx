@@ -197,6 +197,8 @@ class SkidSteerDrive(LiveNode):
 
   def setup(self, ctx: NodeContext) -> None:
     self.backend = create_backend(self.backend_name)
+    if self.backend_name == "auto":
+      ctx.fault(f"hardware backend auto resolved to {self.backend.name}", severity="info", kind="hardware")
     try:
       self.left_motors = [build_motor(self.backend, self.driver, spec, frequency_hz=self.pwm_frequency_hz) for spec in self.left_specs]
       self.right_motors = [build_motor(self.backend, self.driver, spec, frequency_hz=self.pwm_frequency_hz) for spec in self.right_specs]
@@ -326,7 +328,7 @@ class SkidSteerDrive(LiveNode):
   def status(self) -> dict[str, Any]:
     return {
       "driver": self.driver,
-      "backend": self.backend_name,
+      "backend": self.backend.name if self.backend is not None else self.backend_name,
       "target": {"left": round(self._target[0], 4), "right": round(self._target[1], 4)},
       "applied": {"left": round(self._left.applied, 4), "right": round(self._right.applied, 4)},
       "motors": {m.name: round(m.duty, 4) for m in self.left_motors + self.right_motors},
