@@ -6,7 +6,140 @@ from typing import Optional
 
 import typer
 
-app = typer.Typer(help="NervLynx: set up, check, and scaffold robot projects.")
+app = typer.Typer(help="NervLynx: create, simulate, check, and run robot projects.")
+DEFAULT_CONFIG = Path("robot.yaml")
+
+
+def _require_config(config: Path) -> None:
+  if not config.exists():
+    hint = " Create a project with: nervlynx new my-robot" if config == DEFAULT_CONFIG else ""
+    typer.echo(f"{config} not found.{hint}")
+    raise typer.Exit(code=1)
+
+
+@app.command("new")
+def new_project(
+  name: Optional[str] = typer.Argument(None, help="Project folder name, e.g. my-rover."),
+  template: str = typer.Option("obstacle-avoider", "--template", "-t", help="Template to start from (see --list)."),
+  output_dir: Path = typer.Option(Path("."), "--dir", help="Folder to create the project in."),
+  force: bool = typer.Option(False, "--force", help="Overwrite files in an existing folder."),
+  list_templates: bool = typer.Option(False, "--list", help="List the available templates."),
+) -> None:
+  """Create a robot project that runs in the simulator and on a Raspberry Pi."""
+  from robot_core.scaffold import TEMPLATES, ScaffoldError, create_project
+
+  if list_templates or name is None:
+    typer.echo("templates:")
+    for item in TEMPLATES.values():
+      typer.echo(f"  {item.name:<18} {item.summary}")
+    if name is None and not list_templates:
+      typer.echo("\nusage: nervlynx new <name> [--template NAME]")
+      raise typer.Exit(code=2)
+    return
+  try:
+    create_project(name, template, output_dir, force=force)
+  except ScaffoldError as exc:
+    typer.echo(f"new_error: {exc}")
+    raise typer.Exit(code=1)
+  root = output_dir / name
+  typer.echo(f"Created {root} from the {template} template.\n")
+  typer.echo("Next:")
+  typer.echo(f"  cd {root}")
+  typer.echo("  nervlynx sim         # try it in the simulator: http://127.0.0.1:9120/")
+  typer.echo("  nervlynx validate    # check robot.yaml for both sim and robot")
+  typer.echo("  nervlynx run         # on the Raspberry Pi (see README.md for wiring)")
+
+
+@app.command("validate")
+def validate(config: Path = typer.Argument(DEFAULT_CONFIG, help="Robot config to check.")) -> None:
+  """Check a robot config (and its nodes/*.py) for both simulation and the robot."""
+  from robot_core.live_config import MODES, uses_modes, validate_live_config
+  from robot_core.project import load_project
+
+  _require_config(config)
+  try:
+    cfg, registry, problems = load_project(config)
+  except Exception as exc:  # noqa: BLE001 - report any load failure the same way
+    typer.echo(f"{config}: can't be read: {exc}")
+    raise typer.Exit(code=1)
+  issues = list(problems)
+  modes = MODES if uses_modes(cfg) else (None,)
+  for mode in modes:
+    label = f"[{mode}] " if mode else ""
+    issues += [label + issue for issue in validate_live_config(cfg, registry, mode=mode)]
+  if issues:
+    for issue in issues:
+      typer.echo(f"{config}: {issue}")
+    typer.echo(f"{len(issues)} problem{'s' if len(issues) != 1 else ''} found")
+    raise typer.Exit(code=1)
+  where = "sim and robot modes" if uses_modes(cfg) else "every mode"
+  typer.echo(f"{config}: ok in {where} ({len(cfg['nodes'])} nodes)")
+
+
+@app.command("sim")
+def sim(
+  config: Path = typer.Argument(DEFAULT_CONFIG, help="Robot config to simulate."),
+  duration_s: Optional[float] = typer.Option(None, "--duration-s", help="Stop after this long (default: until Ctrl-C, or 60 s with --fast)."),
+  fast: bool = typer.Option(False, "--fast", help="Simulated clock: as fast as the CPU allows and repeatable; no dashboard."),
+  host: str = typer.Option("127.0.0.1", "--host", help="Dashboard address (0.0.0.0 to reach it from another device)."),
+  port: int = typer.Option(9120, "--port"),
+  no_server: bool = typer.Option(False, "--no-server", help="Do not start the dashboard."),
+  strict: bool = typer.Option(False, "--strict", help="Exit 2 on node errors, watchdog faults, e-stops, or collisions."),
+  quiet: bool = typer.Option(False, "--quiet", help="Do not print the report at the end."),
+  run_dir: Optional[Path] = typer.Option(None, "--run-dir", help="Where to write the run report and trace."),
+) -> None:
+  """Run the project in simulation: mock pins, `only: sim` nodes, driving allowed from the dashboard."""
+  from robot_core.session import SessionOptions, run_session
+
+  _require_config(config)
+  opts = SessionOptions(
+    mode="sim",
+    duration_s=duration_s if duration_s is not None or not fast else 60.0,
+    sim_time=fast,
+    host=host,
+    port=port,
+    no_server=no_server,
+    allow_control=True,
+    run_dir=run_dir,
+    strict=strict,
+    quiet=quiet,
+    fail_on_collision=True,
+  )
+  raise typer.Exit(code=run_session(config, opts, typer.echo))
+
+
+@app.command("run")
+def run(
+  config: Path = typer.Argument(DEFAULT_CONFIG, help="Robot config to run."),
+  duration_s: Optional[float] = typer.Option(None, "--duration-s", help="Stop after this long (default: until Ctrl-C)."),
+  control: bool = typer.Option(False, "--control", help="Allow driving and clearing the e-stop from the dashboard."),
+  control_token: Optional[str] = typer.Option(None, "--control-token", envvar="NERVLYNX_CONTROL_TOKEN", help="Require this token for dashboard control."),
+  host: str = typer.Option("0.0.0.0", "--host", help="Dashboard address (default: reachable from other devices)."),
+  port: int = typer.Option(9120, "--port"),
+  no_server: bool = typer.Option(False, "--no-server", help="Do not start the dashboard."),
+  quiet: bool = typer.Option(False, "--quiet", help="Do not print the report at the end."),
+  run_dir: Optional[Path] = typer.Option(None, "--run-dir", help="Where to write the run report and trace."),
+) -> None:
+  """Run the project on the robot: real pins (backend auto), `only: robot` nodes."""
+  import platform
+
+  from robot_core.session import SessionOptions, run_session
+
+  _require_config(config)
+  if not no_server and host in ("0.0.0.0", ""):
+    typer.echo(f"open http://{platform.node() or 'localhost'}.local:{port}/ from a phone or laptop on the same network")
+  opts = SessionOptions(
+    mode="robot",
+    duration_s=duration_s,
+    host=host,
+    port=port,
+    no_server=no_server,
+    allow_control=control,
+    control_token=control_token,
+    run_dir=run_dir,
+    quiet=quiet,
+  )
+  raise typer.Exit(code=run_session(config, opts, typer.echo))
 
 
 def _write(path: Path, content: str) -> None:

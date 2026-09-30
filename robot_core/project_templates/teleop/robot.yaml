@@ -1,0 +1,34 @@
+name: __PROJECT_NAME__
+description: >
+  Drive the robot from the dashboard with W/A/S/D (or arrow keys).
+  Try it in the simulator:  nervlynx sim   (then open http://127.0.0.1:9120/)
+  On the Raspberry Pi:      nervlynx run --control
+
+safety:
+  stale_after_s: 0.5
+
+hardware:
+  backend: auto                  # real pins on a Raspberry Pi, mock pins everywhere else
+
+nodes:
+  # Two DC motors on an L298N. Pins are BCM numbers; see README.md for the wiring.
+  - name: drive
+    plugin: skid_steer_drive
+    rate_hz: 50
+    critical: true
+    params:
+      driver: l298n
+      max_speed: 0.6             # raise once the robot behaves
+      deadman_s: 0.25            # motors stop 0.25 s after you let go
+      left:
+        - {name: left, in1: 5, in2: 6, en: 12}
+      right:
+        - {name: right, in1: 20, in2: 21, en: 13}
+
+  # The simulated robot, only in `nervlynx sim`.
+  - name: sim
+    plugin: skid_steer_sim
+    only: sim
+    rate_hz: 50
+    params:
+      world: {width_m: 5.0, height_m: 4.0}

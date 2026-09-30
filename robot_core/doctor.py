@@ -304,7 +304,7 @@ def check_config(path: Path) -> Check:
   issues = problems + validate_live_config(cfg, registry)
   if issues:
     more = f" (+{len(issues) - 3} more)" if len(issues) > 3 else ""
-    return Check("config", FAIL, f"{path}: " + "; ".join(issues[:3]) + more, f"robot-core live-validate {path} lists every problem.")
+    return Check("config", FAIL, f"{path}: " + "; ".join(issues[:3]) + more, f"nervlynx validate {path} lists every problem.")
   return Check("config", OK, f"{path} is valid ({len(cfg['nodes'])} nodes)")
 
 

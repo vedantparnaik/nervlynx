@@ -44,6 +44,9 @@ skid_steer_sim = "robot_core.sim:SkidSteerSim"
 [tool.setuptools]
 package-dir = {"" = "."}
 
+[tool.setuptools.package-data]
+robot_core = ["project_templates/**/*"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["shuttle*", "robot_core*", "nervlynx*"]

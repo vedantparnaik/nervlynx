@@ -1,0 +1,57 @@
+name: __PROJECT_NAME__
+description: >
+  Drives forward and turns away from anything closer than stop_m.
+  Try it in the simulator:  nervlynx sim   (then open http://127.0.0.1:9120/)
+  On the Raspberry Pi:      nervlynx run
+
+runtime:
+  latest_topics: [range.front]   # always act on the newest distance reading
+
+safety:
+  stale_after_s: 0.5
+
+hardware:
+  backend: auto                  # real pins on a Raspberry Pi, mock pins everywhere else
+
+nodes:
+  # Your code: nodes/avoid.py. Change the settings here or in the function.
+  - plugin: avoid
+    params: {stop_m: 0.4, clear_m: 0.7}
+
+  # Two DC motors on an L298N. Pins are BCM numbers; see README.md for the wiring.
+  - name: drive
+    plugin: skid_steer_drive
+    rate_hz: 50
+    critical: true
+    params:
+      driver: l298n
+      max_speed: 0.6             # raise once the robot behaves
+      deadman_s: 0.3             # motors stop if commands stop
+      left:
+        - {name: left, in1: 5, in2: 6, en: 12}
+      right:
+        - {name: right, in1: 20, in2: 21, en: 13}
+
+  # The real distance sensor, only on the robot.
+  - name: front_range
+    plugin: hcsr04_range
+    only: robot
+    params: {trigger: 23, echo: 24, max_range_m: 2.0}
+
+  # The simulated robot, room, and distance sensor, only in `nervlynx sim`.
+  - name: sim
+    plugin: skid_steer_sim
+    only: sim
+    rate_hz: 50
+    params:
+      world:
+        width_m: 4.0
+        height_m: 3.0
+        obstacles:
+          - {circle: [2.6, 1.5, 0.3]}
+          - {box: [1.2, 2.3, 1.8, 3.0]}
+          - {box: [3.3, 0.0, 4.0, 0.6]}
+      start: [0.6, 1.2, 0.0]
+      range_sensors:
+        # beam_deg: an HC-SR04 hears the nearest echo in a cone about 30 degrees wide.
+        - {name: front, angle_deg: 0, beam_deg: 30, max_range_m: 2.0, noise_m: 0.01}
