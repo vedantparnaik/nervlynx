@@ -78,6 +78,25 @@ jobs:
             logs/live/rover_sim/report.json
             logs/live/rover_sim/report.md
 
+  minimal-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install core only (no extras)
+        run: |
+          python -m pip install -U pip
+          pip install . pytest
+      - name: Core install must not pull in pyzmq or pycapnp
+        run: |
+          python -c "import importlib.util as u, sys; leaked = [m for m in ('zmq', 'capnp') if u.find_spec(m)]; sys.exit(f'installed without an extra: {leaked}' if leaked else 0)"
+      - name: Run tests
+        run: pytest -q
+      - name: Live rover simulation
+        run: robot-core run-live examples/live/rover_sim.yaml --sim-time --duration-s 10 --run-dir logs/live/minimal --strict --quiet
+
   cpp-tests:
     runs-on: ubuntu-latest
     steps:
