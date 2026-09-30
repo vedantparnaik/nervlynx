@@ -37,7 +37,22 @@ _RUNTIME_KEYS = {
 }
 _SAFETY_KEYS = {"stale_after_s", "estop_on_stale", "start_in_estop"}
 _HARDWARE_KEYS = {"backend"}
-_NODE_KEYS = {"name", "plugin", "input_topics", "rate_hz", "critical", "stale_after_s", "topic", "schema", "params"}
+_NODE_KEYS = {"name", "plugin", "input_topics", "rate_hz", "critical", "stale_after_s", "topic", "schema", "params", "only"}
+MODES = ("robot", "sim")
+
+
+def select_mode(cfg: dict[str, Any], mode: str) -> dict[str, Any]:
+  """Copy of `cfg` with only the nodes that run in `mode`; nodes without `only` run in both."""
+  nodes = cfg.get("nodes")
+  if not isinstance(nodes, list):
+    return dict(cfg)
+  kept = [n for n in nodes if not isinstance(n, dict) or n.get("only") in (None, mode)]
+  return {**cfg, "nodes": kept}
+
+
+def uses_modes(cfg: dict[str, Any]) -> bool:
+  nodes = cfg.get("nodes")
+  return isinstance(nodes, list) and any(isinstance(n, dict) and "only" in n for n in nodes)
 
 
 def register_live_builtins(registry: PluginRegistry) -> None:
@@ -94,11 +109,20 @@ def validate_live_config(
   registry: PluginRegistry,
   *,
   backend_override: str | None = None,
+  mode: str | None = None,
 ) -> list[str]:
-  """Return human-readable problems; an empty list means the config can be built."""
+  """Return human-readable problems; an empty list means the config can be built.
+
+  With `mode`, only the nodes that run in that mode are checked (see `select_mode`).
+  """
   if not isinstance(cfg, dict):
     return ["config must be a mapping"]
   issues: list[str] = []
+  if mode is not None and mode not in MODES:
+    return [f"mode must be one of {', '.join(MODES)}"]
+  for idx, node_cfg in enumerate(cfg.get("nodes") if isinstance(cfg.get("nodes"), list) else []):
+    if isinstance(node_cfg, dict) and "only" in node_cfg and node_cfg["only"] not in MODES:
+      issues.append(f"nodes[{idx}].only must be 'sim' or 'robot'")
   for key in sorted(set(cfg) - _TOP_LEVEL_KEYS):
     issues.append(f"unknown top-level key: {key}")
   if "name" in cfg and not _is_name(cfg["name"]):
@@ -156,12 +180,17 @@ def validate_live_config(
   if not isinstance(nodes, list) or not nodes:
     issues.append("nodes must be a non-empty list")
     return issues
+  if mode is not None and not select_mode(cfg, mode)["nodes"]:
+    issues.append(f"no nodes run in {mode} mode")
+    return issues
 
   seen: set[str] = set()
   for idx, node_cfg in enumerate(nodes):
     prefix = f"nodes[{idx}]"
     if not isinstance(node_cfg, dict):
       issues.append(f"{prefix} must be a mapping")
+      continue
+    if mode is not None and node_cfg.get("only") not in (None, mode):
       continue
     plugin = node_cfg.get("plugin")
     if not _is_name(plugin):
@@ -236,10 +265,13 @@ def build_live_runtime(
   clock: Clock | None = None,
   metrics: MetricsRegistry | None = None,
   backend_override: str | None = None,
+  mode: str | None = None,
 ) -> LiveRuntime:
-  issues = validate_live_config(cfg, registry, backend_override=backend_override)
+  issues = validate_live_config(cfg, registry, backend_override=backend_override, mode=mode)
   if issues:
     raise ValueError("invalid live config: " + "; ".join(issues))
+  if mode is not None:
+    cfg = select_mode(cfg, mode)
   runtime_cfg = _section(cfg, "runtime")
   safety = _section(cfg, "safety")
   breaker = runtime_cfg.get("breaker") or {}
