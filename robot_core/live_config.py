@@ -191,11 +191,15 @@ def validate_live_config(
     if registry.has_live_node(plugin):
       factory = registry.get_live_node_factory(plugin)
       try:
-        factory(**_node_params(factory, params, cfg, backend_override))
+        instance = factory(**_node_params(factory, params, cfg, backend_override))
       except TypeError as exc:
         issues.append(f"{prefix}: invalid params for {plugin}: {exc}")
       except ValueError as exc:
         issues.append(f"{prefix}: {exc}")
+      else:
+        effective_topics = topics if topics is not None else list(getattr(instance, "input_topics", ()) or ())
+        if rate is None and getattr(instance, "rate_hz", None) is None and not effective_topics:
+          issues.append(f"{prefix}: has no input_topics and no rate_hz, so it would never run")
     elif registry.has_node(plugin):
       if params:
         issues.append(f"{prefix}: params are only supported for live node plugins")
@@ -269,8 +273,8 @@ def build_live_runtime(
       name,
       node,
       input_topics=topics,
-      rate_hz=node_cfg.get("rate_hz"),
-      critical=bool(node_cfg.get("critical", False)),
+      rate_hz=node_cfg.get("rate_hz", getattr(node, "rate_hz", None)),
+      critical=bool(node_cfg.get("critical", getattr(node, "critical", False))),
       stale_after_s=node_cfg.get("stale_after_s"),
     )
   if safety.get("start_in_estop"):

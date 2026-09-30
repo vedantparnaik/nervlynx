@@ -295,14 +295,14 @@ def check_dashboard(system: System) -> Check:
 
 
 def check_config(path: Path) -> Check:
-  from robot_core.cli import _build_plugin_registry
-  from robot_core.live_config import load_live_config, validate_live_config
+  from robot_core.live_config import validate_live_config
+  from robot_core.project import load_project
 
   try:
-    cfg = load_live_config(path)
+    cfg, registry, problems = load_project(path)
   except Exception as exc:  # noqa: BLE001 - any load failure is reported the same way
     return Check("config", FAIL, f"{path} can't be read: {exc}")
-  issues = validate_live_config(cfg, _build_plugin_registry())
+  issues = problems + validate_live_config(cfg, registry)
   if issues:
     more = f" (+{len(issues) - 3} more)" if len(issues) > 3 else ""
     return Check("config", FAIL, f"{path}: " + "; ".join(issues[:3]) + more, f"robot-core live-validate {path} lists every problem.")

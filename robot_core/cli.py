@@ -22,12 +22,12 @@ from robot_core.distributed import DistributedNodeConfig, DistributedNodeRunner
 from robot_core.examples import build_reference_runtime
 from robot_core.graph import load_graph_config, validate_graph_config, wire_graph_from_config
 from robot_core.live import LiveRuntimeError
-from robot_core.live_config import build_live_runtime, clock_for_config, load_live_config, register_live_builtins, validate_live_config
+from robot_core.live_config import build_live_runtime, clock_for_config, validate_live_config
 from robot_core.metrics import MetricsRegistry, serve_metrics
 from robot_core.observability import flow_stats, topic_latency_stats
 from robot_core.plugins import PluginRegistry
 from robot_core.recorder import read_jsonl, write_jsonl
-from robot_core.reference_plugins import register_reference_plugins
+from robot_core.project import build_registry, load_project
 from robot_core.report import FaultLog, TraceRecorder, build_report, render_markdown
 from robot_core.runtime import PipelineRuntime
 from robot_core.security import TopicAccessPolicy, sign_payload
@@ -46,13 +46,7 @@ CORE_GRAPH_CONFIGS: tuple[Path, ...] = (
 
 
 def _build_plugin_registry() -> PluginRegistry:
-  reg = PluginRegistry()
-  reg.discover_entrypoints()
-  if not reg.catalog().nodes and not reg.catalog().sensors:
-    register_builtin_plugins(reg)
-    register_reference_plugins(reg)
-  register_live_builtins(reg)
-  return reg
+  return build_registry()
 
 
 def _validate_graph_paths(configs: list[Path] | tuple[Path, ...], reg: PluginRegistry) -> bool:
@@ -377,16 +371,15 @@ def live_validate(
   backend: Optional[str] = typer.Option(None, "--backend", help="Validate as if every node used this hardware backend."),
 ) -> None:
   """Validate live graph configs without touching hardware."""
-  reg = _build_plugin_registry()
   ok = True
   for config in configs:
     try:
-      cfg = load_live_config(config)
+      cfg, reg, problems = load_project(config)
     except (OSError, ValueError, yaml.YAMLError) as exc:
       typer.echo(f"{config}: config_error: {exc}")
       ok = False
       continue
-    issues = validate_live_config(cfg, reg, backend_override=backend)
+    issues = problems + validate_live_config(cfg, reg, backend_override=backend)
     if issues:
       ok = False
       for issue in issues:
@@ -416,13 +409,12 @@ def run_live(
   quiet: bool = typer.Option(False, "--quiet", help="Do not print the Markdown report at exit."),
 ) -> None:
   """Run a live graph continuously with dashboard, trace recording, and an end-of-run report."""
-  reg = _build_plugin_registry()
   try:
-    cfg = load_live_config(config)
+    cfg, reg, problems = load_project(config)
   except (OSError, ValueError, yaml.YAMLError) as exc:
     typer.echo(f"{config}: config_error: {exc}")
     raise typer.Exit(code=1)
-  issues = validate_live_config(cfg, reg, backend_override=backend)
+  issues = problems + validate_live_config(cfg, reg, backend_override=backend)
   if issues:
     for issue in issues:
       typer.echo(f"{config}: config_error: {issue}")
