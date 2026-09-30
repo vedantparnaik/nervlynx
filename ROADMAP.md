@@ -56,9 +56,11 @@ Phase 1 (Raspberry Pi 4/5) and most of phase 2 are in:
 - [x] L298N, HC-SR04, MPU6050, and camera (picamera2/OpenCV) nodes with mock twins; latest-value topics and a bounded inbox.
 
 Next, in board order:
-- [ ] Zero 2 W as a first-class target: memory budget, lazy imports in `robot_core/__init__`, low-res camera profile, self-hosted Pi CI runners.
+- [x] Lazy `robot_core` exports: `import nervlynx` loads 5 modules instead of 31 (about 5x faster start-up).
+- [ ] Zero 2 W as a first-class target: memory budget, low-res camera profile, self-hosted Pi CI runners.
 - [ ] Calibration wizard in the dashboard (motor direction, IMU orientation, servo limits); PCA9685 servos; GPS; RPLidar/LD19 driver with a scan view.
-- [ ] ESP32/Pico co-processor firmware (browser flashing, encoders and wheel PID at 1 kHz, its own motor watchdog) and closed-loop drive.
+- [x] ESP32 link host side: `esp32_link` node, Link v1 JSON-lines protocol, simulated board (`docs/ESP32_LINK.md`).
+- [ ] ESP32 firmware tested on hardware (sketch in `firmware/esp32_link/`), browser flashing, wheel PID on the board, Pico build.
 - [ ] Device mesh over Zenoh (laptop, Pi, ESP32 via zenoh-pico, Orin) with `placement:` for nodes.
 - [ ] Orin NX: detector node (CPU, Hailo, TensorRT backends), follow-me template, ROS 2 bridge for SLAM/Nav2.
 - [ ] Voice/LLM agents that call named skills, gated by the same safety layers.
