@@ -47,13 +47,15 @@ def test_select_keeps_the_best_box_per_object_and_class() -> None:
   assert [(c, round(s, 2)) for c, s, _ in picked] == [(0, 0.9), (1, 0.7)]
 
 
-def test_letterbox_pads_like_each_model_family_expects() -> None:
+def test_letterbox_pads_like_each_model_family_expects(monkeypatch) -> None:
   image = np.full((100, 200, 3), 7, dtype=np.uint8)
   boxed, scale, pad_x, pad_y = detect.letterbox(image, 416, center=False)
   assert boxed.shape == (416, 416, 3) and scale == pytest.approx(2.08) and (pad_x, pad_y) == (0, 0)
   assert boxed[0, 0, 0] == 7 and boxed[415, 0, 0] == 114
   _, _, pad_x, pad_y = detect.letterbox(image, 416, center=True)
   assert (pad_x, pad_y) == (0, 104)
+  monkeypatch.setattr(detect, "_importable", lambda module: False)  # numpy only
+  assert detect._resize(np.arange(12, dtype=np.uint8).reshape(2, 2, 3), 4, 4).shape == (4, 4, 3)
 
 
 def test_detections_are_plain_json_fractions() -> None:

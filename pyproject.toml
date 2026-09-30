@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "pyzmq>=26.0.0", "pycapnp>=2.0.0", "eclipse-zenoh>=1.0", "numpy>=1.24"]
+dev = ["pytest>=8.0.0", "pyzmq>=26.0.0", "pycapnp>=2.0.0", "eclipse-zenoh>=1.0", "numpy>=1.24", "pillow>=10.0"]
 zmq = ["pyzmq>=26.0.0"]
 shuttle = ["pyzmq>=26.0.0", "pycapnp>=2.0.0"]
 mesh = ["eclipse-zenoh>=1.0"]

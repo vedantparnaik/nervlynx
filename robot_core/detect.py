@@ -157,9 +157,13 @@ def _resize(image: Any, width: int, height: int) -> Any:
     import cv2  # type: ignore[import-not-found]
 
     return cv2.resize(image, (width, height), interpolation=cv2.INTER_LINEAR)
-  from PIL import Image  # type: ignore[import-not-found]
+  if _importable("PIL"):
+    from PIL import Image  # type: ignore[import-not-found]
 
-  return np.asarray(Image.fromarray(image).resize((width, height), Image.BILINEAR))
+    return np.asarray(Image.fromarray(image).resize((width, height), Image.BILINEAR))
+  rows = (np.arange(height) * (image.shape[0] / height)).astype(int)
+  cols = (np.arange(width) * (image.shape[1] / width)).astype(int)
+  return image[rows][:, cols]  # nearest neighbour: coarser, but needs only numpy
 
 
 def letterbox(image: Any, size: int, *, center: bool, pad_value: int = 114) -> tuple[Any, float, int, int]:
