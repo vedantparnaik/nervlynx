@@ -31,6 +31,7 @@ LIVE_BUILTINS: dict[str, str] = {
   "skills": "robot_core.skills:SkillRunner",
   "agent": "robot_core.agent:Agent",
   "voice": "robot_core.voice:Voice",
+  "wheel_odometry": "robot_core.odometry:WheelOdometry",
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes", "devices", "mesh"}

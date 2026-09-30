@@ -414,6 +414,24 @@ thing in a sector, e.g. `sector_min(scan, 0, 60)` straight ahead.
 The simulator publishes the same scans from its world with `skid_steer_sim`'s `lidar:`
 setting, and the dashboard draws them.
 
+### `wheel_odometry`
+
+Pose and speed from wheel encoders (a differential drive), published on `odom` in the
+simulator's format (`x_m`, `y_m`, `heading_deg`, `speed_mps`, `yaw_rate_dps`,
+`distance_m`), so the ROS 2 bridge, the `drive` and `turn` skills, and your own nodes work
+the same on the robot. It reads cumulative counts (`{"left_ticks", "right_ticks"}`, as
+`esp32_link` publishes on `link.encoders`).
+
+```yaml
+- plugin: wheel_odometry
+  params: {ticks_per_meter: 4700, track_width_m: 0.16}   # or wheel_diameter_m + ticks_per_rev
+```
+
+Measure `ticks_per_meter` by driving a metre in a straight line, and `track_width_m`
+between the wheels' contact points (tune it until a 360-degree turn reads 360).
+`invert_left` / `invert_right` flip an encoder that counts backwards. Wheel odometry
+drifts, heading most of all.
+
 ### `detector`
 
 Object detection on a camera's frames. A worker thread takes each new frame from
