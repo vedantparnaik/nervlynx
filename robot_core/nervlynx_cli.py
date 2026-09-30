@@ -339,6 +339,78 @@ def doctor(
   raise typer.Exit(code=1 if any(check.status == FAIL for check in checks) else 0)
 
 
+def _target(host: str, project: Path, path: Optional[str], remote_nervlynx: str, run_args: str = ""):
+  from robot_core.remote import RemoteError, target_for
+
+  try:
+    return target_for(host, project, path=path, nervlynx=remote_nervlynx, run_args=run_args)
+  except RemoteError as exc:
+    typer.echo(f"remote_error: {exc}")
+    raise typer.Exit(code=2)
+
+
+@app.command("deploy")
+def deploy_cmd(
+  host: str = typer.Argument(..., help="The robot: user@host or an ssh config name, e.g. pi@my-rover.local."),
+  project: Path = typer.Option(Path("."), "--project", help="Project folder to copy (the one with robot.yaml)."),
+  path: Optional[str] = typer.Option(None, "--path", help="Folder on the robot (default: ~/nervlynx-projects/<project name>)."),
+  service: bool = typer.Option(False, "--service", help="Install a systemd user service that runs the project at boot, and start it."),
+  restart: bool = typer.Option(False, "--restart", help="Restart the already-installed service after copying."),
+  run_args: str = typer.Option("", "--run-args", help="Extra `nervlynx run` options for the service, e.g. \"--control\"."),
+  no_validate: bool = typer.Option(False, "--no-validate", help="Skip `nervlynx validate` on the robot."),
+  remote_nervlynx: str = typer.Option("nervlynx", "--remote-nervlynx", help="nervlynx command on the robot, e.g. ~/.venv/bin/nervlynx."),
+) -> None:
+  """Copy this project to the robot over SSH, check it there, and optionally run it as a service."""
+  from robot_core.remote import RemoteError, deploy
+
+  target = _target(host, project, path, remote_nervlynx, run_args)
+  try:
+    code = deploy(target, project, install_service=service, restart=restart, validate=not no_validate, echo=typer.echo)
+  except RemoteError as exc:
+    typer.echo(f"remote_error: {exc}")
+    raise typer.Exit(code=2)
+  raise typer.Exit(code=code)
+
+
+@app.command("logs")
+def logs_cmd(
+  host: str = typer.Argument(..., help="The robot: user@host or an ssh config name."),
+  project: Path = typer.Option(Path("."), "--project", help="Project folder (its name picks the service)."),
+  lines: int = typer.Option(100, "--lines", "-n", help="How many earlier lines to show."),
+  no_follow: bool = typer.Option(False, "--no-follow", help="Print and exit instead of following."),
+) -> None:
+  """Show the robot's service logs (from `nervlynx deploy --service`)."""
+  from robot_core.remote import RemoteError, logs
+
+  try:
+    raise typer.Exit(code=logs(_target(host, project, None, "nervlynx"), follow=not no_follow, lines=lines))
+  except RemoteError as exc:
+    typer.echo(f"remote_error: {exc}")
+    raise typer.Exit(code=2)
+
+
+@app.command("pull")
+def pull_cmd(
+  host: str = typer.Argument(..., help="The robot: user@host or an ssh config name."),
+  project: Path = typer.Option(Path("."), "--project", help="Project folder (its name picks the folder on the robot)."),
+  path: Optional[str] = typer.Option(None, "--path", help="Project folder on the robot (default: ~/nervlynx-projects/<name>)."),
+  destination: Optional[Path] = typer.Option(None, "--to", help="Where to put the runs (default: logs/robot/<host>/)."),
+) -> None:
+  """Copy the runs recorded on the robot (reports and traces) back to this computer."""
+  from robot_core.remote import RemoteError, pull
+
+  target = _target(host, project, path, "nervlynx")
+  dest = destination or project / "logs" / "robot" / host.split("@")[-1]
+  try:
+    code = pull(target, dest)
+  except RemoteError as exc:
+    typer.echo(f"remote_error: {exc}")
+    raise typer.Exit(code=2)
+  if code == 0:
+    typer.echo(f"runs from {host} are in {dest}")
+  raise typer.Exit(code=code)
+
+
 @app.command("scan")
 def scan_cmd(
   bus: int = typer.Option(1, "--bus", help="I2C bus number (1 on a Raspberry Pi)."),
