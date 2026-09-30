@@ -5,9 +5,11 @@ import math
 import random
 import threading
 from collections import deque
-from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from threading import Thread
-from typing import Any, Iterable, Mapping, Union
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Union
+
+if TYPE_CHECKING:
+  from http.server import HTTPServer
 
 LabelKey = tuple[tuple[str, str], ...]
 Labels = Union[Mapping[str, object], LabelKey, None]
@@ -294,6 +296,8 @@ class MetricsRegistry:
 
 
 def serve_metrics(registry: MetricsRegistry, host: str = "0.0.0.0", port: int = 9108) -> HTTPServer:
+  from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
   class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
       if self.path != "/metrics":

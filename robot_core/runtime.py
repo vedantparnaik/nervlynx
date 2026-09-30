@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
 import heapq
@@ -210,6 +209,8 @@ class AsyncPipelineRuntime(PipelineRuntime):
     self._async_subscriptions[topic].append((node_name, handler))
 
   async def run_once_async(self, root_message: RuntimeMessage, max_hops: int = 1024) -> list[RuntimeMessage]:
+    import asyncio
+
     seen: list[RuntimeMessage] = []
     pq: asyncio.PriorityQueue[tuple[int, int, RuntimeMessage]] = asyncio.PriorityQueue(maxsize=self._max_queue_size)
     counter = 0

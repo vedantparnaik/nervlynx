@@ -1,89 +1,85 @@
-"""Reusable robotics runtime skeleton."""
+"""Reusable robotics runtime skeleton.
 
-from robot_core.builtin_plugins import register_builtin_plugins
-from robot_core.checkpoint import CheckpointStore
-from robot_core.chaos import ChaosConfig, run_chaos_pass
-from robot_core.codegen import load_contract_idl, run_codegen
-from robot_core.contracts import TopicContract, check_contract_migration, default_contracts, validate_payload
-from robot_core.dashboard import serve_dashboard, snapshot_runtime
-from robot_core.distributed import DistributedNodeConfig, DistributedNodeRunner
-from robot_core.drive import DriveTuning, SkidSteerDrive
-from robot_core.graph import load_graph_config, wire_graph_from_config
-from robot_core.hardware import BTS7960Motor, MockBackend, TB6612Motor, create_backend
-from robot_core.live import FaultEvent, LiveNode, LiveRuntime, LiveRuntimeError, NodeContext
-from robot_core.live_config import build_live_runtime, load_live_config, register_live_builtins, validate_live_config
-from robot_core.metrics import Histogram, MetricsRegistry, serve_metrics
-from robot_core.observability import flow_stats, structured_event, timeline_by_trace, topic_latency_stats
-from robot_core.plugins import PluginRegistry
-from robot_core.reference_plugins import register_reference_plugins
-from robot_core.runtime import AsyncPipelineRuntime, Envelope, PipelineRuntime, RuntimeMessage, SimulatedClock, SystemClock
-from robot_core.security import TopicAccessPolicy, sign_payload, verify_payload_signature
-from robot_core.server import serve_live
-from robot_core.sim import ScriptedDriveSource, SkidSteerSim
-from robot_core.smoke_matrix import run_smoke_matrix
-from robot_core.smoke_surveillance import run_surveillance_smoke
-from robot_core.supervisor import ManagedNode, RuntimeSupervisor
-from robot_core.transport import InMemoryTransport, ZmqJsonTransport
-from robot_core.watchdog import HealthWatchdog
+Exports load on first use, so `import robot_core.live` (or `from nervlynx import node`)
+does not import the whole package; that start-up time matters on a Pi Zero 2 W.
+"""
 
-__all__ = [
-  "Envelope",
-  "RuntimeMessage",
-  "PipelineRuntime",
-  "AsyncPipelineRuntime",
-  "SystemClock",
-  "SimulatedClock",
-  "HealthWatchdog",
-  "PluginRegistry",
-  "register_builtin_plugins",
-  "register_reference_plugins",
-  "CheckpointStore",
-  "ChaosConfig",
-  "run_chaos_pass",
-  "load_contract_idl",
-  "run_codegen",
-  "RuntimeSupervisor",
-  "ManagedNode",
-  "DistributedNodeConfig",
-  "DistributedNodeRunner",
-  "InMemoryTransport",
-  "ZmqJsonTransport",
-  "TopicAccessPolicy",
-  "sign_payload",
-  "verify_payload_signature",
-  "MetricsRegistry",
-  "serve_metrics",
-  "serve_dashboard",
-  "snapshot_runtime",
-  "TopicContract",
-  "default_contracts",
-  "validate_payload",
-  "check_contract_migration",
-  "load_graph_config",
-  "wire_graph_from_config",
-  "timeline_by_trace",
-  "topic_latency_stats",
-  "flow_stats",
-  "structured_event",
-  "run_smoke_matrix",
-  "run_surveillance_smoke",
-  "LiveRuntime",
-  "LiveNode",
-  "NodeContext",
-  "LiveRuntimeError",
-  "FaultEvent",
-  "build_live_runtime",
-  "load_live_config",
-  "validate_live_config",
-  "register_live_builtins",
-  "serve_live",
-  "SkidSteerDrive",
-  "DriveTuning",
-  "ScriptedDriveSource",
-  "SkidSteerSim",
-  "BTS7960Motor",
-  "TB6612Motor",
-  "MockBackend",
-  "create_backend",
-  "Histogram",
-]
+from importlib import import_module
+from typing import Any
+
+_EXPORTS = {
+  "Envelope": "robot_core.runtime",
+  "RuntimeMessage": "robot_core.runtime",
+  "PipelineRuntime": "robot_core.runtime",
+  "AsyncPipelineRuntime": "robot_core.runtime",
+  "SystemClock": "robot_core.runtime",
+  "SimulatedClock": "robot_core.runtime",
+  "HealthWatchdog": "robot_core.watchdog",
+  "PluginRegistry": "robot_core.plugins",
+  "register_builtin_plugins": "robot_core.builtin_plugins",
+  "register_reference_plugins": "robot_core.reference_plugins",
+  "CheckpointStore": "robot_core.checkpoint",
+  "ChaosConfig": "robot_core.chaos",
+  "run_chaos_pass": "robot_core.chaos",
+  "load_contract_idl": "robot_core.codegen",
+  "run_codegen": "robot_core.codegen",
+  "RuntimeSupervisor": "robot_core.supervisor",
+  "ManagedNode": "robot_core.supervisor",
+  "DistributedNodeConfig": "robot_core.distributed",
+  "DistributedNodeRunner": "robot_core.distributed",
+  "InMemoryTransport": "robot_core.transport",
+  "ZmqJsonTransport": "robot_core.transport",
+  "TopicAccessPolicy": "robot_core.security",
+  "sign_payload": "robot_core.security",
+  "verify_payload_signature": "robot_core.security",
+  "MetricsRegistry": "robot_core.metrics",
+  "serve_metrics": "robot_core.metrics",
+  "serve_dashboard": "robot_core.dashboard",
+  "snapshot_runtime": "robot_core.dashboard",
+  "TopicContract": "robot_core.contracts",
+  "default_contracts": "robot_core.contracts",
+  "validate_payload": "robot_core.contracts",
+  "check_contract_migration": "robot_core.contracts",
+  "load_graph_config": "robot_core.graph",
+  "wire_graph_from_config": "robot_core.graph",
+  "timeline_by_trace": "robot_core.observability",
+  "topic_latency_stats": "robot_core.observability",
+  "flow_stats": "robot_core.observability",
+  "structured_event": "robot_core.observability",
+  "run_smoke_matrix": "robot_core.smoke_matrix",
+  "run_surveillance_smoke": "robot_core.smoke_surveillance",
+  "LiveRuntime": "robot_core.live",
+  "LiveNode": "robot_core.live",
+  "NodeContext": "robot_core.live",
+  "LiveRuntimeError": "robot_core.live",
+  "FaultEvent": "robot_core.live",
+  "build_live_runtime": "robot_core.live_config",
+  "load_live_config": "robot_core.live_config",
+  "validate_live_config": "robot_core.live_config",
+  "register_live_builtins": "robot_core.live_config",
+  "serve_live": "robot_core.server",
+  "SkidSteerDrive": "robot_core.drive",
+  "DriveTuning": "robot_core.drive",
+  "ScriptedDriveSource": "robot_core.sim",
+  "SkidSteerSim": "robot_core.sim",
+  "BTS7960Motor": "robot_core.hardware",
+  "TB6612Motor": "robot_core.hardware",
+  "MockBackend": "robot_core.hardware",
+  "create_backend": "robot_core.hardware",
+  "Histogram": "robot_core.metrics",
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+  module = _EXPORTS.get(name)
+  if module is None:
+    raise AttributeError(f"module 'robot_core' has no attribute {name!r}")
+  value = getattr(import_module(module), name)
+  globals()[name] = value
+  return value
+
+
+def __dir__() -> list[str]:
+  return sorted(set(globals()) | set(_EXPORTS))

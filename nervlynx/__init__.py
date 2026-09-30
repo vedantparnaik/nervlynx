@@ -10,14 +10,22 @@
 their hooks receive.
 """
 
-from importlib.metadata import PackageNotFoundError, version
+from typing import Any
 
 from robot_core.live import LiveNode, NodeContext
 from robot_core.node_api import node
 
-try:
-  __version__ = version("nervlynx")
-except PackageNotFoundError:  # pragma: no cover - running from a source checkout without install
-  __version__ = "0+unknown"
-
 __all__ = ["node", "LiveNode", "NodeContext", "__version__"]
+
+
+def __getattr__(name: str) -> Any:
+  if name != "__version__":
+    raise AttributeError(f"module 'nervlynx' has no attribute {name!r}")
+  from importlib.metadata import PackageNotFoundError, version
+
+  try:
+    value = version("nervlynx")
+  except PackageNotFoundError:  # pragma: no cover - running from a source checkout without install
+    value = "0+unknown"
+  globals()["__version__"] = value
+  return value
