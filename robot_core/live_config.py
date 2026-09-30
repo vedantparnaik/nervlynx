@@ -14,12 +14,15 @@ from robot_core.live import ESTOP_TOPIC, LiveNode, LiveRuntime, PluginNodeAdapte
 from robot_core.metrics import MetricsRegistry
 from robot_core.plugins import PluginRegistry
 from robot_core.runtime import Clock, SimulatedClock, SystemClock
+from robot_core.sensors import HCSR04Range, MPU6050Imu
 from robot_core.sim import ScriptedDriveSource, SkidSteerSim
 
 LIVE_BUILTINS: dict[str, Callable[..., LiveNode]] = {
   "skid_steer_drive": SkidSteerDrive,
   "scripted_drive": ScriptedDriveSource,
   "skid_steer_sim": SkidSteerSim,
+  "hcsr04_range": HCSR04Range,
+  "mpu6050_imu": MPU6050Imu,
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes"}
