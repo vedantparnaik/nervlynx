@@ -38,6 +38,8 @@ make graph-list-core-verify  # optional: fail if bundled core graph files are mi
 make graph-list-core-verify-json  # optional: verify core packs and print JSON for scripts
 make graph-run-file GRAPH=examples/robot_packs/warehouse.yaml GRAPH_OUTPUT=logs/warehouse_trace.jsonl
 make preflight       # optional: core-graph existence + validation + replay + check bundle
+make live-validate   # optional: validate live graphs in examples/live
+make live-sim        # optional: rover simulation on a simulated clock
 ```
 
 Scaffold a new plugin pack: `nervlynx init <name>` (see `docs/PLUGIN_AUTHORING.md`).

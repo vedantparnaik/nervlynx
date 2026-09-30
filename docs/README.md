@@ -3,6 +3,7 @@
 | Document | Audience | Summary |
 | --- | --- | --- |
 | [GETTING_STARTED.md](GETTING_STARTED.md) | Everyone | Persona-based first-run paths. |
+| [LIVE_RUNTIME.md](LIVE_RUNTIME.md) | Robot builders | Continuous graphs, hardware, safety model, dashboard, metrics, run reports. |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Contributors | `make` targets, local Python/C++ workflows. |
 | [PLUGIN_AUTHORING.md](PLUGIN_AUTHORING.md) | Plugin authors | `nervlynx init`, reference packs, entry points. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Integrators | Runtime layers, transport, operations. |

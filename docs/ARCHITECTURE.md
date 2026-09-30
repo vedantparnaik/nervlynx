@@ -7,8 +7,9 @@
    - Supports compatibility checks for schema evolution.
 
 2. **Runtime**
-   - `PipelineRuntime`: deterministic, priority-aware in-process executor.
+   - `PipelineRuntime`: deterministic, priority-aware in-process executor (one seed, run to completion).
    - `AsyncPipelineRuntime`: async event-loop variant for concurrent pipelines.
+   - `LiveRuntime`: continuous executor with fixed-rate ticks, real or simulated clock, circuit breakers, watchdog, latched e-stop, and a stall guard (`docs/LIVE_RUNTIME.md`).
    - Queue backpressure is surfaced as runtime faults.
 
 3. **Transport**
@@ -30,10 +31,27 @@
 6. **Security**
    - Payload signing and verification via HMAC.
    - Topic-level access policy checks for publish/subscribe boundaries.
+   - Live HTTP control gated by `--allow-control`, a token, and a topic allowlist; e-stop always allowed.
 
 7. **Debugging**
-   - JSONL trace recording and replay.
+   - JSONL trace recording and replay (one-shot runs and streaming live sessions).
    - Trace timeline, per-topic latency, and end-to-end flow stats.
+   - Per-session run reports with tick jitter, handler cost, and trace latency percentiles.
+
+8. **Hardware and simulation**
+   - Pin backends (`mock`, `rpi_gpio`, `gpiozero`) and BTS7960/TB6612 motor drivers.
+   - `SkidSteerDrive` actuator node (deadman, kick, slew, floors) and a `SkidSteerSim` plant.
+
+## Live control loop
+
+```
+scripted_drive / HTTP teleop --cmd.drive--> skid_steer_drive --PWM--> motors
+                                                 |
+                                            drive.state --> skid_steer_sim --> odom
+```
+
+The stall guard, watchdog, and e-stop sit outside this path and can stop the motors
+regardless of what the nodes are doing.
 
 ## Related documentation
 
