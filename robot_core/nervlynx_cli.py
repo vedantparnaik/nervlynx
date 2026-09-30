@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Optional
 
 import typer
 
-app = typer.Typer(help="NervLynx developer scaffolding CLI.")
+app = typer.Typer(help="NervLynx: set up, check, and scaffold robot projects.")
 
 
 def _write(path: Path, content: str) -> None:
@@ -186,6 +188,22 @@ def test_nodes_produce_expected_topics() -> None:
   )
 
   typer.echo(f"scaffold_created path={root}")
+
+
+@app.command("doctor")
+def doctor(
+  config: Optional[Path] = typer.Argument(None, help="Robot config (live graph YAML) to validate as well."),
+  as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+  """Check this machine for the setup problems that stop robots working."""
+  from robot_core.doctor import FAIL, render_text, run_checks
+
+  checks = run_checks(config=config)
+  if as_json:
+    typer.echo(json.dumps([check.to_dict() for check in checks], indent=2))
+  else:
+    typer.echo(render_text(checks))
+  raise typer.Exit(code=1 if any(check.status == FAIL for check in checks) else 0)
 
 
 @app.command("version")
