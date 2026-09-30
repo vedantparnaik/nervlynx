@@ -4,18 +4,23 @@ from pathlib import Path
 
 import typer
 
-from shuttle.broker import run_broker
+try:
+  from shuttle.broker import run_broker
+  from shuttle.processes import (
+    run_controller,
+    run_logger,
+    run_planner,
+    run_replay,
+    run_route_manager,
+    run_safety_manager,
+    run_state_estimator,
+    run_watchdog,
+  )
+except ModuleNotFoundError as exc:
+  if exc.name not in ("zmq", "capnp"):
+    raise
+  raise SystemExit("shuttle-stack needs the shuttle extra: pip install 'nervlynx[shuttle]'") from exc
 from shuttle.config import load_config
-from shuttle.processes import (
-  run_controller,
-  run_logger,
-  run_planner,
-  run_replay,
-  run_route_manager,
-  run_safety_manager,
-  run_state_estimator,
-  run_watchdog,
-)
 
 app = typer.Typer(help="Fixed-route shuttle reference stack CLI.")
 

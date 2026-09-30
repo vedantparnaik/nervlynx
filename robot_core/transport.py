@@ -35,11 +35,19 @@ class InMemoryTransport(Transport):
     self._subs.clear()
 
 
+def _require_zmq():
+  try:
+    import zmq
+  except ImportError as exc:
+    raise ModuleNotFoundError("ZmqJsonTransport needs pyzmq: pip install 'nervlynx[zmq]'", name="zmq") from exc
+  return zmq
+
+
 class ZmqJsonTransport(Transport):
   """Simple JSON transport for multi-process local deployment."""
 
   def __init__(self, pub_address: str, sub_address: str) -> None:
-    import zmq
+    zmq = _require_zmq()
 
     self._ctx = zmq.Context.instance()
     self._pub = self._ctx.socket(zmq.PUB)
@@ -61,13 +69,13 @@ class ZmqJsonTransport(Transport):
     self._pub.send_multipart([msg.envelope.topic.encode("utf-8"), json.dumps(row).encode("utf-8")])
 
   def subscribe(self, topic: str, callback: TransportCallback) -> None:
-    import zmq
+    zmq = _require_zmq()
 
     self._callbacks.setdefault(topic, []).append(callback)
     self._sub.setsockopt(zmq.SUBSCRIBE, topic.encode("utf-8"))
 
   def poll_once(self, timeout_ms: int = 50) -> bool:
-    import zmq
+    zmq = _require_zmq()
 
     if not self._sub.poll(timeout_ms, zmq.POLLIN):
       return False

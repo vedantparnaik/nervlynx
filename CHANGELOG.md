@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Core install is PyYAML + Typer only.** `pyzmq` and `pycapnp` moved to extras (`nervlynx[zmq]` for `ZmqJsonTransport`, `nervlynx[shuttle]` for the shuttle stack; `dev` still installs both), so installing on a Pi Zero 2 W compiles nothing. Missing extras now fail with the `pip install` hint instead of a bare `ModuleNotFoundError`. A `minimal-install` CI job runs the suite and a strict rover simulation without extras.
 - `MetricsRegistry` is thread-safe and supports labels, histograms (Prometheus buckets plus reservoir quantiles), `# HELP` text, and JSON snapshots; unlabelled series render exactly as before. `serve_metrics` uses a threading server.
 - `SystemClock.sleep_until_ns` compensates for OS sleep overshoot (learned per clock), cutting median tick lateness from milliseconds to microseconds on macOS; `Clock` gains `sleep_until_ns` and `simulated`.
 - `PipelineRuntime.subscriptions` exposes topic subscribers; the dashboard no longer reads private runtime state.

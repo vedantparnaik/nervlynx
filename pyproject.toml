@@ -8,14 +8,14 @@ version = "0.2.0"
 description = "Reusable robotics runtime core with a shuttle reference stack"
 requires-python = ">=3.10"
 dependencies = [
-  "pycapnp>=2.0.0",
-  "pyzmq>=26.0.0",
   "PyYAML>=6.0.1",
   "typer>=0.12.3",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0"]
+dev = ["pytest>=8.0.0", "pyzmq>=26.0.0", "pycapnp>=2.0.0"]
+zmq = ["pyzmq>=26.0.0"]
+shuttle = ["pyzmq>=26.0.0", "pycapnp>=2.0.0"]
 pi = [
   "RPi.GPIO>=0.7.1; platform_system == 'Linux'",
   "gpiozero>=2.0; platform_system == 'Linux'",
