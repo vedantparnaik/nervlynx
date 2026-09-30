@@ -170,6 +170,7 @@ Consumes drive commands, applies them to motors at `rate_hz`, and publishes `dri
 | `command_topic` / `state_topic` | `cmd.drive` / `drive.state` | Topic names |
 | `state_every_n_ticks` | 2 | `drive.state` heartbeat rate (also published on each new command) |
 | `tuning` | see below | Shaping for real gearmotors |
+| `swap_sides` | false | The motors listed under `left` are on the robot's right (set by the calibration wizard) |
 
 Motor spec fields: `name`, pins (BCM numbers), and `invert: true` for motors mounted
 mirrored. Pin conflicts are rejected at validation time.
@@ -267,7 +268,40 @@ a fault that says how to check the wiring (`i2cdetect -y 1`).
 | --- | --- | --- |
 | `bus` / `address` | 1 / `0x68` | `0x69` when AD0 is pulled high |
 | `accel_range_g` / `gyro_range_dps` | 2 / 250 | Full-scale ranges |
+| `axes` | `["+x", "+y", "+z"]` | Which signed IMU axis points along the robot's forward, left, and up; readings are published in the robot's frame. The calibration wizard works it out from two poses; mirror-image mappings are rejected |
 | `backend` | `mock` | Any real backend (e.g. `auto`) uses the I2C bus; mock reports 1 g on z and zero rotation |
+
+### `pca9685_servos`
+
+Hobby servos on a PCA9685 16-channel PWM board over I2C (`smbus2`). The board times the
+pulses itself, so servos don't twitch the way software PWM makes them. Commands on
+`cmd.servo` are angles by servo name, `{"pan": 45, "tilt": 100}` (or `{"name": "pan",
+"deg": 45}`); state is published on `servo.state` at 10 Hz.
+
+```yaml
+- name: arm
+  plugin: pca9685_servos
+  params:
+    address: 0x40
+    on_stop: hold                # or relax: cut the pulses on e-stop and at shutdown
+    servos:
+      - {name: pan, channel: 0, min_us: 600, max_us: 2400, max_speed_dps: 180}
+      - {name: tilt, channel: 1, min_deg: 30, max_deg: 150, home_deg: 90, invert: true}
+```
+
+| Servo field | Default | Meaning |
+| --- | --- | --- |
+| `name`, `channel` | required | Unique name and PCA9685 output 0..15 |
+| `min_us` / `max_us` | 1000 / 2000 | Pulse widths at the ends of travel (400..2600); find them with the calibration wizard so the servo never buzzes against its end stop |
+| `min_deg` / `max_deg` | 0 / 180 | Angles those pulses mean; commands are clamped to this range |
+| `home_deg` | middle | Where the servo goes at start-up |
+| `max_speed_dps` | 360 | Slew limit so a servo never slams across its range |
+| `invert` | false | Reverse the direction |
+
+Commands are ignored while the e-stop is latched. With `on_stop: hold` (the default) the
+servos stay where they were, which keeps an arm from dropping what it holds; with
+`relax` they go limp and stay limp until a command moves them again. Power servos from
+their own 5-6 V supply (the board's V+ terminal), never from the Pi's 5 V pin.
 
 ## Safety model
 

@@ -23,6 +23,7 @@ LIVE_BUILTINS: dict[str, str] = {
   "mpu6050_imu": "robot_core.sensors:MPU6050Imu",
   "camera": "robot_core.camera:CameraNode",
   "esp32_link": "robot_core.link:Esp32Link",
+  "pca9685_servos": "robot_core.servos:Pca9685Servos",
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes"}
