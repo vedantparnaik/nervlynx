@@ -8,9 +8,12 @@ GET  /stats      full runtime snapshot (JSON)
 GET  /faults     recent structured faults
 GET  /camera/<node>.mjpg     live stream of a camera node (multipart, one image per part)
 GET  /camera/<node>/latest   the newest frame of a camera node
+GET  /calibration            what each calibratable node can do, and the saved calibration
 POST /estop      latch the e-stop (always allowed)
 POST /estop/clear            requires control access
 POST /publish {topic, schema, payload}   requires control access and an allowed topic
+POST /calibration/<node> {action, ...}   one calibration-wizard step; requires control access
+POST /calibration/save                   write calibration.yaml; requires control access
 
 Control access means the server was started with `allow_control=True` and, if a token
 is configured, the request carries it (header `X-NervLynx-Token` or `?token=`).
@@ -22,14 +25,16 @@ import hmac
 import json
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from threading import Event, Thread
 from typing import Any, Iterable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-from robot_core.live import LiveRuntime
+from robot_core.live import LiveRuntime, LiveRuntimeError, supports_calibration
 
 _MAX_BODY_BYTES = 64 * 1024
 _CAMERA_PATH = re.compile(r"^/camera/([A-Za-z0-9_.-]+?)(\.mjpg|/latest)$")
+_CALIBRATION_PATH = re.compile(r"^/calibration/([^/]+)$")
 _BOUNDARY = "nervlynxframe"
 
 
@@ -55,7 +60,10 @@ def serve_live(
   allow_control: bool = False,
   control_topics: Iterable[str] = ("cmd.drive",),
   control_token: str | None = None,
+  config_path: str | Path | None = None,
 ) -> ThreadingHTTPServer:
+  """`config_path` (robot.yaml) is where the calibration wizard saves calibration.yaml;
+  without it the wizard still works but cannot save."""
   topics = tuple(control_topics)
   page = _DASHBOARD_HTML.replace(
     "__CONFIG__",
@@ -127,8 +135,72 @@ def serve_live(
         self._json([event.to_dict() for event in runtime.fault_events])
       elif _CAMERA_PATH.match(path):
         self._camera(*_CAMERA_PATH.match(path).groups())
+      elif path == "/calibration":
+        self._calibration_overview()
       else:
         self._json({"error": "not found"}, 404)
+
+    def _calibratable(self) -> list[str]:
+      return [name for name, node in runtime.nodes.items() if supports_calibration(node)]
+
+    def _calibration_overview(self) -> None:
+      nodes: dict[str, Any] = {}
+      for name in self._calibratable():
+        try:
+          nodes[name] = runtime.call_node(name, lambda node, ctx: node.calibrate("describe", {}, ctx))
+        except (TimeoutError, ValueError, LiveRuntimeError) as exc:
+          nodes[name] = {"error": str(exc)}
+      saved = None
+      if config_path is not None:
+        import yaml
+
+        from robot_core.overlay import CALIBRATION_FILE
+
+        file = Path(config_path).resolve().parent / CALIBRATION_FILE
+        if file.is_file():
+          try:
+            saved = yaml.safe_load(file.read_text(encoding="utf-8"))
+          except (OSError, yaml.YAMLError) as exc:
+            saved = {"error": str(exc)}
+      self._json({"nodes": nodes, "can_save": config_path is not None and self._authorised(), "saved": saved})
+
+    def _calibrate(self, name: str, body: dict[str, Any]) -> None:
+      if name not in self._calibratable():
+        self._json({"error": f"no calibratable node named {name!r}"}, 404)
+        return
+      action = body.pop("action", None)
+      if not isinstance(action, str):
+        self._json({"error": "body needs an action, e.g. {\"action\": \"describe\"}"}, 400)
+        return
+      try:
+        result = runtime.call_node(name, lambda node, ctx: node.calibrate(action, body, ctx))
+      except ValueError as exc:
+        self._json({"error": str(exc)}, 400)
+      except TimeoutError as exc:
+        self._json({"error": str(exc)}, 504)
+      else:
+        self._json(result)
+
+    def _save_calibration(self) -> None:
+      if config_path is None:
+        self._json({"error": "this session has no robot.yaml to save calibration.yaml beside"}, 409)
+        return
+      from robot_core.overlay import write_calibration
+
+      patches: dict[str, Any] = {}
+      try:
+        for name in self._calibratable():
+          patch = runtime.call_node(name, lambda node, ctx: node.calibration())
+          if patch:
+            patches[name] = {"params": patch}
+      except TimeoutError as exc:
+        self._json({"error": str(exc)}, 504)
+        return
+      if not patches:
+        self._json({"ok": True, "saved": {}, "message": "nothing has been calibrated yet"})
+        return
+      path = write_calibration(config_path, patches)
+      self._json({"ok": True, "saved": patches, "message": f"saved to {path.name}; it applies every time the robot starts"})
 
     def _camera(self, node_name: str, kind: str) -> None:
       buffer = getattr(runtime.nodes.get(node_name), "frame_buffer", None)
@@ -169,11 +241,18 @@ def serve_live(
         runtime.request_estop(str(body.get("reason") or "operator request"), source="http")
         self._json({"ok": True, "estop": True})
         return
-      if path not in ("/estop/clear", "/publish"):
+      calibration = _CALIBRATION_PATH.match(path)
+      if path not in ("/estop/clear", "/publish") and calibration is None:
         self._json({"error": "not found"}, 404)
         return
       if not self._authorised():
         self._json({"error": "control is disabled or the token is missing/invalid"}, 403)
+        return
+      if path == "/calibration/save":
+        self._save_calibration()
+        return
+      if calibration is not None:
+        self._calibrate(unquote(calibration.group(1)), body)
         return
       if path == "/estop/clear":
         runtime.request_estop_clear(source="http")
@@ -219,6 +298,8 @@ td.last{max-width:640px;overflow:hidden;text-overflow:ellipsis;font:12px ui-mono
 #knob{width:60px;height:60px;border-radius:50%;background:#1f6feb;position:absolute;left:50px;top:50px;pointer-events:none}
 #camgrid{display:flex;gap:12px;flex-wrap:wrap}#camgrid figure{margin:0}#camgrid img{max-width:100%;width:480px;border-radius:6px;background:#000;display:block}
 #worldc{width:100%;max-width:640px;background:#0b0f14;border-radius:6px;display:block}
+h3{font-size:13px;margin:14px 0 6px}.warn{color:var(--warn)}.calnode+.calnode{border-top:1px solid var(--line);margin-top:10px}
+#calibbody p{margin:6px 0;line-height:2.4}#calibbody input[type=range]{width:220px;max-width:100%;vertical-align:middle}
 </style></head><body>
 <header><h1 id="name">NervLynx</h1><span id="status" class="pill">...</span><span id="uptime" class="dim"></span><span class="spacer"></span>
 <button id="clear" hidden>Clear e-stop</button><button class="stop" id="estop">E-STOP</button></header>
@@ -231,6 +312,9 @@ td.last{max-width:640px;overflow:hidden;text-overflow:ellipsis;font:12px ui-mono
 <p class="dim">Commands stream at 10 Hz while you hold; let go and the drive deadman stops the motors.</p></section>
 <section id="world" hidden><h2>Simulation</h2><canvas id="worldc" width="640" height="480"></canvas><p id="worldinfo" class="dim"></p></section>
 <section id="cameras" class="wide" hidden><h2>Cameras</h2><div id="camgrid"></div></section>
+<section id="calib" class="wide" hidden><h2>Calibrate</h2>
+<p class="dim">Changes apply immediately. Save writes calibration.yaml beside robot.yaml so they apply every time this robot starts.</p>
+<div id="calibbody"></div><p><button id="calibsave" hidden>Save calibration</button> <span id="calibmsg" class="dim"></span></p></section>
 <section class="wide"><h2>Nodes</h2><table id="nodes"></table></section>
 <section class="wide"><h2>Topics</h2><table id="topics"></table></section>
 <section class="wide"><h2>Recent faults</h2><table id="faults"></table></section>
@@ -377,5 +461,78 @@ if (CFG.allow_control && CFG.drive_topic) {
   };
   setInterval(() => { if (stickCmd) sendStick(); }, 100);
 }
+const panels = {}, probes = {};
+const calib = (node, action, args) => post('/calibration/' + encodeURIComponent(node), Object.assign({action}, args || {}))
+  .then(async r => { const out = await r.json(); if (!r.ok) throw new Error(out.error || r.statusText); return out; });
+const say = (text, bad) => { $('calibmsg').textContent = text || ''; $('calibmsg').className = bad ? 'bad' : 'dim'; };
+const btn = (node, action, label, args) => '<button data-node="' + esc(node) + '" data-action="' + action + '" data-args="' +
+  esc(JSON.stringify(args || {})) + '">' + label + '</button>';
+function drivePanel(n, d) {
+  const probe = probes[n] || d.tuning.min_duty;
+  const rows = ['left', 'right'].flatMap(side => d.sides[side].map(m => '<p>' + side + ' side &middot; <b>' + esc(m.name) + '</b> ' +
+    btn(n, 'spin', 'Spin forward', {motor: m.name}) + ' turned backward? ' +
+    btn(n, 'invert', m.invert ? 'Undo invert' : 'Invert it', {motor: m.name, value: !m.invert}) + ' <span class="dim">' +
+    (m.invert ? 'inverted' : 'as wired') + '</span></p>'));
+  return '<h3>' + esc(n) + ': motors</h3><p class="warn">Put the robot on a box so its wheels spin freely. Each test runs for about a second.</p>' +
+    rows.join('') + '<h3>Driving</h3><p>Wheels on the ground, clear space around it: ' +
+    btn(n, 'test', 'Drive forward', {move: 'forward'}) + ' ' + btn(n, 'test', 'Turn left', {move: 'left'}) +
+    ' &middot; if "turn left" turned it right: ' + btn(n, 'swap_sides', d.swap_sides ? 'Undo swap' : 'Swap sides', {value: !d.swap_sides}) + '</p>' +
+    '<h3>Smallest power that moves it</h3><p>' + btn(n, 'probe', 'Try ' + probe.toFixed(2), {duty: probe}) + ' ' +
+    btn(n, 'tuning', 'It moved: use ' + probe.toFixed(2), {min_duty: probe}) + ' <span class="dim">now ' + d.tuning.min_duty.toFixed(2) + '</span></p>' +
+    (d.savable ? '' : '<p class="bad">Give every motor a name: in robot.yaml so its calibration can be saved.</p>');
+}
+function imuPanel(n, d) {
+  return '<h3>' + esc(n) + ': how the IMU is mounted</h3><p>1. Set the robot flat and still, then ' + btn(n, 'flat', 'Capture flat') +
+    '</p><p>2. Lift the front about 30&deg; and hold it still, then ' + btn(n, 'nose_up', 'Capture nose-up') +
+    '</p><p class="dim">axes now: forward ' + esc(d.axes[0]) + ', left ' + esc(d.axes[1]) + ', up ' + esc(d.axes[2]) + '</p>';
+}
+function servoPanel(n, d) {
+  return '<h3>' + esc(n) + ': servo travel</h3><p class="dim">Slide slowly towards each end and stop just before the servo buzzes or binds.</p>' +
+    d.servos.map(s => '<p>' + esc(s.name) + ' (channel ' + s.channel + ') <input type="range" min="500" max="2500" step="10" value="' +
+      (s.us ?? 1500) + '" data-node="' + esc(n) + '" data-servo="' + esc(s.name) + '"> <span>' + Math.round(s.us ?? 1500) + ' us</span> ' +
+      btn(n, 'set_limit', 'Set as min', {servo: s.name, which: 'min'}) + ' ' + btn(n, 'set_limit', 'Set as max', {servo: s.name, which: 'max'}) + ' ' +
+      btn(n, 'set_limit', 'Set as home', {servo: s.name, which: 'home'}) + ' <span class="dim">' + s.min_us + '&ndash;' + s.max_us + ' us, home ' +
+      s.home_deg + '&deg;</span></p>').join('') + '<p>' + btn(n, 'home', 'Go home') + '</p>';
+}
+function showPanel(n, d) {
+  if (!panels[n]) { panels[n] = document.createElement('div'); panels[n].className = 'calnode'; $('calibbody').appendChild(panels[n]); }
+  panels[n].innerHTML = d.error ? '<h3>' + esc(n) + '</h3><p class="bad">' + esc(d.error) + '</p>' :
+    d.kind === 'drive' ? drivePanel(n, d) : d.kind === 'imu' ? imuPanel(n, d) : d.kind === 'servos' ? servoPanel(n, d) : '';
+}
+async function loadCalibration() {
+  let data;
+  try { data = await (await fetch('/calibration' + location.search, {cache: 'no-store'})).json(); } catch (e) { return; }
+  if (!Object.keys(data.nodes || {}).length) return;
+  $('calib').hidden = false; $('calibsave').hidden = !data.can_save;
+  Object.entries(data.nodes).forEach(([n, d]) => showPanel(n, d));
+}
+$('calibbody').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-action]');
+  if (!b) return;
+  const node = b.dataset.node, args = JSON.parse(b.dataset.args);
+  let action = b.dataset.action;
+  if (action === 'probe') { action = 'test'; Object.assign(args, {move: 'forward', seconds: 0.8}); }
+  try {
+    const d = await calib(node, action, args);
+    if (b.dataset.action === 'probe') probes[node] = Math.min(args.duty + 0.03, d.max_speed);
+    if (action === 'tuning') delete probes[node];
+    showPanel(node, d); say(d.message || (d.testing ? 'running: ' + d.testing : 'done'));
+  } catch (err) { say(err.message, true); }
+});
+const jog = s => {
+  if (s.busy) { s.again = true; return; }
+  s.busy = true;
+  calib(s.dataset.node, 'jog', {servo: s.dataset.servo, us: Number(s.value)}).catch(err => say(err.message, true))
+    .finally(() => { s.busy = false; if (s.again) { s.again = false; jog(s); } });
+};
+$('calibbody').addEventListener('input', e => {
+  const s = e.target.closest('input[data-servo]');
+  if (s) { s.nextElementSibling.textContent = s.value + ' us'; jog(s); }
+});
+$('calibsave').onclick = async () => {
+  try { const r = await post('/calibration/save'); const out = await r.json(); say(out.message || out.error, !r.ok); }
+  catch (err) { say(err.message, true); }
+};
+if (CFG.allow_control) loadCalibration();
 </script></body></html>
 """

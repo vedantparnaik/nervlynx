@@ -93,6 +93,7 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
         allow_control=opts.allow_control,
         control_topics=list(opts.control_topics),
         control_token=opts.control_token,
+        config_path=config,
       )
     except OSError as exc:
       fault_log.close()

@@ -153,6 +153,39 @@ nodes:
   - {plugin: skid_steer_sim, only: sim, params: {world: ..., range_sensors: [{name: front}]}}
 ```
 
+### Calibration wizard and per-robot overlays
+
+Run with dashboard control (`nervlynx run --control`, or `nervlynx sim`) and the dashboard
+shows a **Calibrate** section for every node that supports it:
+
+- **Drive**: spin each motor forward and invert the ones that turn backward; drive forward
+  and turn left, and swap sides if "left" turned right; step the power up until the robot
+  just moves and keep that as `min_duty`. Tests last about a second, refuse to run while
+  the e-stop is latched, and stop the moment any drive command arrives.
+- **IMU**: capture the robot flat, then with its front lifted, and it works out `axes`.
+- **Servos**: slide each servo towards its ends and set `min_us`, `max_us`, and home.
+
+Changes apply immediately. **Save** writes them to `calibration.yaml` beside `robot.yaml`,
+which is applied every time that robot starts. It only ever holds what you calibrated, so
+`robot.yaml` stays exactly as you wrote it and can be shared between robots.
+
+`calibration.yaml` and `overlay.yaml` (per-robot settings written by `nervlynx fleet`) are
+both overlays: nodes are addressed by name, mappings merge key by key, and lists of named
+items (motors, servos) merge item by item:
+
+```yaml
+nodes:
+  drive:
+    params:
+      right: [{name: right, invert: true}]
+      tuning: {min_duty: 0.22}
+```
+
+Anything an overlay names must exist in `robot.yaml`, so renaming a motor makes
+`nervlynx validate` fail instead of silently dropping its calibration. `nervlynx deploy`
+never copies or deletes either file on the robot, and every run records the overlays it
+used next to its report.
+
 ## Built-in live nodes
 
 ### `skid_steer_drive`
@@ -336,6 +369,9 @@ command cannot resume motion.
 | `POST /estop` | Latch the e-stop (always allowed) |
 | `POST /estop/clear` | Needs `--allow-control` (and the token, if set) |
 | `POST /publish` | `{"topic","schema","payload"}`; needs control access and a `--control-topic` |
+| `GET /calibration` | Calibratable nodes, what the wizard shows for each, and the saved `calibration.yaml` |
+| `POST /calibration/<node>` | `{"action", ...}`: one wizard step, run on the executor thread; needs control access |
+| `POST /calibration/save` | Write `calibration.yaml`; needs control access |
 
 Use `--host 0.0.0.0` to reach the dashboard from another machine, and set
 `--control-token` (or `NERVLYNX_CONTROL_TOKEN`) on shared networks; the dashboard passes
