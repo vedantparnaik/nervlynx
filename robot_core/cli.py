@@ -1,26 +1,37 @@
 from __future__ import annotations
 
 import json
+import shutil
+import signal
 import time
 from pathlib import Path
+from typing import Any, Optional
+from urllib.error import URLError
+from urllib.request import urlopen
 
 import typer
+import yaml
 
 from robot_core.builtin_plugins import register_builtin_plugins
 from robot_core.checkpoint import CheckpointStore
-from robot_core.chaos import ChaosConfig, run_chaos_pass
+from robot_core.chaos import ChaosConfig, run_chaos_pass, run_chaos_trials
 from robot_core.codegen import run_codegen
 from robot_core.contracts import check_contract_migration, default_contracts
 from robot_core.dashboard import serve_dashboard
 from robot_core.distributed import DistributedNodeConfig, DistributedNodeRunner
 from robot_core.examples import build_reference_runtime
 from robot_core.graph import load_graph_config, validate_graph_config, wire_graph_from_config
+from robot_core.live import LiveRuntimeError
+from robot_core.live_config import build_live_runtime, clock_for_config, load_live_config, register_live_builtins, validate_live_config
 from robot_core.metrics import MetricsRegistry, serve_metrics
 from robot_core.observability import flow_stats, topic_latency_stats
 from robot_core.plugins import PluginRegistry
 from robot_core.recorder import read_jsonl, write_jsonl
+from robot_core.reference_plugins import register_reference_plugins
+from robot_core.report import FaultLog, TraceRecorder, build_report, render_markdown
 from robot_core.runtime import PipelineRuntime
 from robot_core.security import TopicAccessPolicy, sign_payload
+from robot_core.server import serve_live
 from robot_core.smoke_matrix import run_smoke_matrix
 from robot_core.smoke_surveillance import run_surveillance_smoke
 from robot_core.supervisor import ManagedNode, RuntimeSupervisor
@@ -39,6 +50,8 @@ def _build_plugin_registry() -> PluginRegistry:
   reg.discover_entrypoints()
   if not reg.catalog().nodes and not reg.catalog().sensors:
     register_builtin_plugins(reg)
+    register_reference_plugins(reg)
+  register_live_builtins(reg)
   return reg
 
 
@@ -121,12 +134,18 @@ def smoke_matrix(output_dir: Path = Path("logs/smoke_matrix")) -> None:
 
 
 @app.command("inspect-trace")
-def inspect_trace(input: Path) -> None:
+def inspect_trace(
+  input: Path,
+  limit: int = typer.Option(0, "--limit", help="Only print the N slowest traces (0 prints all)."),
+) -> None:
   events = read_jsonl(input)
   for stat in topic_latency_stats(events):
     typer.echo(f"topic={stat.topic} count={stat.count} avg_delta_ms={stat.avg_delta_ms:.3f}")
-  for stat in flow_stats(events):
+  flows = flow_stats(events)
+  for stat in flows[:limit] if limit > 0 else flows:
     typer.echo(f"trace={stat.trace_id[:8]} messages={stat.topic_count} e2e_ms={stat.end_to_end_ms:.3f}")
+  if limit > 0 and len(flows) > limit:
+    typer.echo(f"traces_total={len(flows)} shown={limit}")
 
 
 @app.command("contracts-check")
@@ -291,15 +310,21 @@ def dashboard_demo(duration_s: float = 5.0, port: int = 9120) -> None:
 
 
 @app.command("chaos-pass")
-def chaos_pass(drop_probability: float = 0.2, mutate_probability: float = 0.2) -> None:
+def chaos_pass(drop_probability: float = 0.2, mutate_probability: float = 0.2, seed: int = 7, trials: int = 1) -> None:
+  """Inject drop/mutate faults into the reference pipeline (deterministic for a given seed)."""
   runtime = build_reference_runtime()
-  message_count = run_chaos_pass(
-    runtime,
-    seed_topic="sensors.raw",
-    seed_payload={"camera_count": 4, "gps_fix": True},
-    cfg=ChaosConfig(drop_probability=drop_probability, mutate_probability=mutate_probability),
+  cfg = ChaosConfig(drop_probability=drop_probability, mutate_probability=mutate_probability, seed=seed)
+  seed_payload = {"camera_count": 4, "gps_fix": True}
+  if trials <= 1:
+    message_count = run_chaos_pass(runtime, seed_topic="sensors.raw", seed_payload=seed_payload, cfg=cfg)
+    typer.echo(f"chaos_trace_messages={message_count}")
+    return
+  summary = run_chaos_trials(runtime, "sensors.raw", seed_payload, cfg, trials)
+  typer.echo(
+    f"chaos_trials={summary.trials} dropped={summary.dropped} mutated={summary.mutated} "
+    f"passed={summary.passed_through} drop_rate={summary.drop_rate:.3f} mutate_rate={summary.mutate_rate:.3f} "
+    f"total_messages={summary.total_messages}"
   )
-  typer.echo(f"chaos_trace_messages={message_count}")
 
 
 @app.command("checkpoint-demo")
@@ -344,6 +369,207 @@ def distributed_demo() -> None:
   )
   transport.publish(seed)
   typer.echo(f"distributed_outputs={len(received)} topics={','.join(received)}")
+
+
+@app.command("live-validate")
+def live_validate(
+  configs: list[Path],
+  backend: Optional[str] = typer.Option(None, "--backend", help="Validate as if every node used this hardware backend."),
+) -> None:
+  """Validate live graph configs without touching hardware."""
+  reg = _build_plugin_registry()
+  ok = True
+  for config in configs:
+    try:
+      cfg = load_live_config(config)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+      typer.echo(f"{config}: config_error: {exc}")
+      ok = False
+      continue
+    issues = validate_live_config(cfg, reg, backend_override=backend)
+    if issues:
+      ok = False
+      for issue in issues:
+        typer.echo(f"{config}: config_error: {issue}")
+      continue
+    typer.echo(f"{config}: live_config_valid=true nodes={len(cfg['nodes'])}")
+  if not ok:
+    raise typer.Exit(code=1)
+
+
+@app.command("run-live")
+def run_live(
+  config: Path = typer.Argument(..., help="Live graph YAML, e.g. examples/live/rover_sim.yaml."),
+  duration_s: Optional[float] = typer.Option(None, "--duration-s", help="Stop after this much runtime-clock time (default: until Ctrl-C)."),
+  sim_time: bool = typer.Option(False, "--sim-time", help="Simulated clock: runs as fast as possible and is deterministic."),
+  backend: Optional[str] = typer.Option(None, "--backend", help="Override the hardware backend of every node: mock, rpi_gpio, gpiozero."),
+  host: str = typer.Option("127.0.0.1", "--host", help="Dashboard bind address. Use 0.0.0.0 to reach it from another machine."),
+  port: int = typer.Option(9120, "--port", help="Dashboard / metrics port."),
+  no_server: bool = typer.Option(False, "--no-server", help="Do not start the HTTP dashboard."),
+  allow_control: bool = typer.Option(False, "--allow-control", help="Allow teleop publishing and e-stop clearing over HTTP."),
+  control_topic: list[str] = typer.Option(["cmd.drive"], "--control-topic", help="Topic HTTP clients may publish to (repeatable)."),
+  control_token: Optional[str] = typer.Option(None, "--control-token", envvar="NERVLYNX_CONTROL_TOKEN", help="Require this token for control requests."),
+  run_dir: Optional[Path] = typer.Option(None, "--run-dir", help="Artifact directory (default: logs/live/<graph>-<timestamp>)."),
+  no_record: bool = typer.Option(False, "--no-record", help="Skip the JSONL message trace."),
+  record_exclude: list[str] = typer.Option([], "--record-exclude", help="Topic to leave out of the trace (repeatable)."),
+  strict: bool = typer.Option(False, "--strict", help="Exit 2 if any node error, watchdog fault, stall, or e-stop occurred."),
+  quiet: bool = typer.Option(False, "--quiet", help="Do not print the Markdown report at exit."),
+) -> None:
+  """Run a live graph continuously with dashboard, trace recording, and an end-of-run report."""
+  reg = _build_plugin_registry()
+  try:
+    cfg = load_live_config(config)
+  except (OSError, ValueError, yaml.YAMLError) as exc:
+    typer.echo(f"{config}: config_error: {exc}")
+    raise typer.Exit(code=1)
+  issues = validate_live_config(cfg, reg, backend_override=backend)
+  if issues:
+    for issue in issues:
+      typer.echo(f"{config}: config_error: {issue}")
+    raise typer.Exit(code=1)
+  clock = clock_for_config(cfg, simulated=sim_time)
+  if clock.simulated and duration_s is None:
+    typer.echo("config_error: --duration-s is required with a simulated clock")
+    raise typer.Exit(code=2)
+  runtime = build_live_runtime(cfg, reg, clock=clock, backend_override=backend)
+
+  out_dir = run_dir or Path("logs/live") / f"{runtime.name}-{time.strftime('%Y%m%d-%H%M%S')}"
+  out_dir.mkdir(parents=True, exist_ok=True)
+  shutil.copyfile(config, out_dir / "config.yaml")
+  fault_log = FaultLog(out_dir / "faults.jsonl")
+  runtime.add_fault_listener(fault_log)
+  recorder = None
+  if not no_record:
+    recorder = TraceRecorder(out_dir / "trace.jsonl", exclude_topics=record_exclude)
+    runtime.add_message_listener(recorder)
+
+  server = None
+  if not no_server and not clock.simulated:
+    try:
+      server = serve_live(
+        runtime,
+        host=host,
+        port=port,
+        allow_control=allow_control,
+        control_topics=control_topic,
+        control_token=control_token,
+      )
+    except OSError as exc:
+      fault_log.close()
+      if recorder is not None:
+        recorder.close()
+      typer.echo(f"dashboard_error: cannot listen on {host}:{port}: {exc}")
+      raise typer.Exit(code=1)
+    shown = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    typer.echo(f"dashboard=http://{shown}:{port}/ metrics=http://{shown}:{port}/metrics control={'on' if allow_control else 'off'}")
+
+  previous: dict[int, Any] = {}
+  for sig in (signal.SIGINT, signal.SIGTERM):
+    try:
+      previous[sig] = signal.signal(sig, lambda *_: runtime.stop())
+    except ValueError:  # not on the main thread
+      pass
+  typer.echo(f"run_live_started graph={runtime.name} clock={'simulated' if clock.simulated else 'system'} run_dir={out_dir}")
+  wall_started = time.time()
+  exit_code = 0
+  try:
+    runtime.run(duration_s=duration_s)
+  except LiveRuntimeError as exc:
+    typer.echo(f"run_live_error: {exc}")
+    exit_code = 1
+  finally:
+    for sig, handler in previous.items():
+      signal.signal(sig, handler)
+    if server is not None:
+      server.shutdown()
+      server.server_close()
+    if recorder is not None:
+      recorder.close()
+    fault_log.close()
+  wall_finished = time.time()
+
+  artifacts = {"config": str(out_dir / "config.yaml"), "faults": str(out_dir / "faults.jsonl")}
+  if recorder is not None:
+    artifacts["trace"] = str(recorder.path)
+  artifacts.update({"report_json": str(out_dir / "report.json"), "report_md": str(out_dir / "report.md"), "metrics": str(out_dir / "metrics.prom")})
+  report = build_report(
+    runtime,
+    config_path=config,
+    wall_started=wall_started,
+    wall_finished=wall_finished,
+    artifacts=artifacts,
+    extra={"trace_messages": recorder.written if recorder else 0, "fault_log_entries": fault_log.count},
+  )
+  (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
+  markdown = render_markdown(report)
+  (out_dir / "report.md").write_text(markdown, encoding="utf-8")
+  (out_dir / "metrics.prom").write_text(runtime.metrics.render_prometheus(), encoding="utf-8")
+  if not quiet:
+    typer.echo(markdown)
+  health = report["health"]["status"]
+  typer.echo(f"run_live_done graph={runtime.name} status={health} messages={report['messages']['published']} report={out_dir / 'report.json'}")
+  if exit_code == 0 and strict:
+    kinds = report["faults"]["by_kind"]
+    if any(kinds.get(k) for k in ("node_error", "watchdog", "stall", "estop", "setup_failed")):
+      typer.echo("run_live_strict=fail")
+      exit_code = 2
+  raise typer.Exit(code=exit_code)
+
+
+def _fmt_top(stats: dict[str, Any], url: str) -> str:
+  def ms(summary: dict[str, Any] | None, key: str = "p95") -> str:
+    value = (summary or {}).get(key)
+    return "-" if value is None else f"{value:.3f}"
+
+  health, msgs, ex = stats["health"], stats["messages"], stats["executor"]
+  lines = [
+    f"{stats['name']}  [{health['status'].upper()}]  up {health['uptime_s']:.1f}s  {stats['clock']} clock  {url}",
+    f"messages pub={msgs['published']} del={msgs['delivered']} drop={msgs['dropped']}  queue={ex['queue_depth']}  "
+    f"steps={ex['steps']}  e-stops={stats['estop']['events']}  stalls={ex['stalls']}",
+  ]
+  if stats["estop"]["engaged"]:
+    lines.append(f"E-STOP LATCHED by {stats['estop']['source']}: {stats['estop']['reason']}")
+  lines += ["", f"{'node':<22}{'Hz':>7}{'ticks':>9}{'handled':>9}{'err':>6}{'tick p95':>10}{'late p95':>10}{'hdl p95':>9}  state"]
+  for name, node in stats["nodes"].items():
+    state = "STALE" if node["stale"] else "BREAKER" if node["breaker_open"] else "ok"
+    lines.append(
+      f"{name[:21]:<22}{node['rate_hz'] or '':>7}{node['ticks']:>9}{node['handled']:>9}{node['errors']:>6}"
+      f"{ms(node.get('tick_ms')):>10}{ms(node.get('lateness_ms')):>10}{ms(node['handler_ms']):>9}  {state}"
+    )
+  lines += ["", f"{'topic':<26}{'count':>9}{'Hz':>8}{'lat p50':>10}{'lat p95':>10}  last"]
+  for topic, t in stats["topics"].items():
+    last = json.dumps(t["last"], default=str)
+    lines.append(f"{topic[:25]:<26}{t['count']:>9}{t['rate_hz']:>8.1f}{ms(t['latency_ms'], 'p50'):>10}{ms(t['latency_ms']):>10}  {last[:60]}")
+  if stats["faults"]:
+    lines += ["", "recent faults:"]
+    lines += [f"  {f['severity']:<8} {f['kind']:<18} {f['message']}" for f in stats["faults"][-6:]]
+  return "\n".join(lines)
+
+
+@app.command("top")
+def top(
+  url: str = typer.Argument("http://127.0.0.1:9120", help="Base URL of a run-live dashboard."),
+  interval_s: float = typer.Option(1.0, "--interval-s"),
+  once: bool = typer.Option(False, "--once", help="Print one snapshot and exit."),
+) -> None:
+  """Terminal view of a running graph (handy over SSH on the robot)."""
+  base = url.rstrip("/")
+  while True:
+    try:
+      with urlopen(f"{base}/stats", timeout=3) as resp:
+        stats = json.loads(resp.read().decode("utf-8"))
+    except (URLError, OSError, ValueError) as exc:
+      typer.echo(f"top_error: cannot read {base}/stats: {exc}")
+      raise typer.Exit(code=1)
+    text = _fmt_top(stats, base)
+    if once:
+      typer.echo(text)
+      return
+    typer.echo("\x1b[2J\x1b[H" + text)
+    try:
+      time.sleep(interval_s)
+    except KeyboardInterrupt:
+      return
 
 
 @app.command("contracts-codegen")

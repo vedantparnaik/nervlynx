@@ -7,13 +7,19 @@ from robot_core.codegen import load_contract_idl, run_codegen
 from robot_core.contracts import TopicContract, check_contract_migration, default_contracts, validate_payload
 from robot_core.dashboard import serve_dashboard, snapshot_runtime
 from robot_core.distributed import DistributedNodeConfig, DistributedNodeRunner
+from robot_core.drive import DriveTuning, SkidSteerDrive
 from robot_core.graph import load_graph_config, wire_graph_from_config
-from robot_core.metrics import MetricsRegistry, serve_metrics
+from robot_core.hardware import BTS7960Motor, MockBackend, TB6612Motor, create_backend
+from robot_core.live import FaultEvent, LiveNode, LiveRuntime, LiveRuntimeError, NodeContext
+from robot_core.live_config import build_live_runtime, load_live_config, register_live_builtins, validate_live_config
+from robot_core.metrics import Histogram, MetricsRegistry, serve_metrics
 from robot_core.observability import flow_stats, structured_event, timeline_by_trace, topic_latency_stats
 from robot_core.plugins import PluginRegistry
 from robot_core.reference_plugins import register_reference_plugins
 from robot_core.runtime import AsyncPipelineRuntime, Envelope, PipelineRuntime, RuntimeMessage, SimulatedClock, SystemClock
 from robot_core.security import TopicAccessPolicy, sign_payload, verify_payload_signature
+from robot_core.server import serve_live
+from robot_core.sim import ScriptedDriveSource, SkidSteerSim
 from robot_core.smoke_matrix import run_smoke_matrix
 from robot_core.smoke_surveillance import run_surveillance_smoke
 from robot_core.supervisor import ManagedNode, RuntimeSupervisor
@@ -61,4 +67,23 @@ __all__ = [
   "structured_event",
   "run_smoke_matrix",
   "run_surveillance_smoke",
+  "LiveRuntime",
+  "LiveNode",
+  "NodeContext",
+  "LiveRuntimeError",
+  "FaultEvent",
+  "build_live_runtime",
+  "load_live_config",
+  "validate_live_config",
+  "register_live_builtins",
+  "serve_live",
+  "SkidSteerDrive",
+  "DriveTuning",
+  "ScriptedDriveSource",
+  "SkidSteerSim",
+  "BTS7960Motor",
+  "TB6612Motor",
+  "MockBackend",
+  "create_backend",
+  "Histogram",
 ]
