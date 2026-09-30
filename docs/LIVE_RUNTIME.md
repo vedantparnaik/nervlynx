@@ -398,6 +398,41 @@ thing in a sector, e.g. `sector_min(scan, 0, 60)` straight ahead.
 The simulator publishes the same scans from its world with `skid_steer_sim`'s `lidar:`
 setting, and the dashboard draws them.
 
+### `detector`
+
+Object detection on a camera's frames. A worker thread takes each new frame from
+`frames(camera)` (a camera on this computer, or one shared from another device by the
+mesh), runs the model, and the node publishes on `detections.<camera>`:
+
+```json
+{"seq": 812, "width": 640, "height": 480, "latency_ms": 23.1, "backend": "onnx", "model": "yolox-nano",
+ "detections": [{"label": "person", "confidence": 0.87, "box": [0.43, 0.13, 0.77, 0.91],
+                 "center": [0.6, 0.52], "size": [0.34, 0.78]}]}
+```
+
+Boxes are fractions of the image (x right, y down), so code works at any resolution. The
+model never runs on the executor thread: a slow model lowers the detection rate, not the
+control loop.
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `camera` | `front` | Which camera's frames to read |
+| `backend` | `auto` | `onnx` (ONNX Runtime on the CPU), `tensorrt` (ONNX Runtime's TensorRT provider on a Jetson; engines are cached after the first start), `opencv` (OpenCV DNN), `hailo` (Raspberry Pi AI Kit / AI HAT+ with a `.hef` model), `auto`, or `mock` |
+| `model` | `yolox-nano` | `yolox-nano` or `yolox-tiny` (Apache-2.0, downloaded once and checksum-checked), a `.onnx` path (YOLOX or YOLOv8/YOLO11 exports), or a `.hef` path or name from `/usr/share/hailo-models` |
+| `labels` | all | Only report these classes, e.g. `[person]` |
+| `min_confidence` / `iou_threshold` | 0.5 / 0.45 | Detection threshold and overlap suppression |
+| `max_fps` | 10 | Upper bound on inference rate |
+| `download` | true | Download a named model on first use; with false, run `nervlynx models get <name>` beforehand |
+| `class_names` | COCO's 80 | Class names for a custom model |
+
+Install with `pip install "nervlynx[ai]"` (numpy, ONNX Runtime, Pillow; OpenCV is used for
+decoding when present). `nervlynx models` lists the named models and whether they are
+downloaded. On a Pi 5 CPU, yolox-nano runs at several frames a second; on an Orin NX use
+`backend: tensorrt`, and to run it on the Orin while the camera is on the Pi, place the
+detector there and share the camera with `mesh.frames` (see [MESH.md](MESH.md)). The
+simulator publishes the same payload from its world (`skid_steer_sim` `cameras:`). The
+Hailo and TensorRT backends have not been run on that hardware yet.
+
 ## Safety model
 
 Layered so that no single failure leaves motors running:

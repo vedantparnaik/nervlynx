@@ -470,6 +470,32 @@ def scan_cmd(
     typer.echo(f"wrote {output}")
 
 
+@app.command("models")
+def models_cmd(
+  action: str = typer.Argument("list", help="list, or get."),
+  name: Optional[str] = typer.Argument(None, help="The model to download with get, e.g. yolox-nano."),
+) -> None:
+  """List the named detection models, or download one ahead of time (nervlynx models get yolox-nano)."""
+  from robot_core.detect import MODELS, fetch_model, model_dir
+  from robot_core.hardware import HardwareUnavailable
+
+  if action == "list":
+    for info in MODELS.values():
+      state = "downloaded" if (model_dir() / f"{info.name}.onnx").is_file() else "not downloaded"
+      typer.echo(f"  {info.name:<12} {info.size_mb:5.1f} MB  {info.license:<11} {state}")
+    typer.echo(f"cache: {model_dir()} (set NERVLYNX_MODEL_DIR to move it)")
+    return
+  if action != "get" or not name:
+    typer.echo("usage: nervlynx models [list] | nervlynx models get <name>")
+    raise typer.Exit(code=2)
+  try:
+    path = fetch_model(name, echo=typer.echo)
+  except (ValueError, HardwareUnavailable) as exc:
+    typer.echo(f"models_error: {exc}")
+    raise typer.Exit(code=1)
+  typer.echo(f"{name}: {path}")
+
+
 @app.command("version")
 def version() -> None:
   """Print the installed nervlynx package version."""
