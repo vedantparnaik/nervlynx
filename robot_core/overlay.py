@@ -52,6 +52,8 @@ def merge(base: Any, patch: Any, *, where: str = "", strict: bool = True) -> Any
     for key, value in patch.items():
       out[key] = merge(base[key], value, where=f"{where}.{key}" if where else str(key), strict=strict) if key in base else value
     return out
+  if _named_list(patch) and isinstance(base, list) and base and not _named_list(base):
+    raise OverlayError(f"{where}: give every item in robot.yaml a name: so it can be patched by name")
   if _named_list(base) and _named_list(patch):
     out = [dict(item) for item in base]
     index = {item["name"]: i for i, item in enumerate(out)}

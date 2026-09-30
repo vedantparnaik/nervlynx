@@ -10,12 +10,51 @@ real part on a Raspberry Pi and the mock twin elsewhere.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections import deque
+from typing import Any, Iterable, Sequence
 
 from robot_core.hardware import HardwareUnavailable, resolve_backend
 from robot_core.live import LiveNode, NodeContext, Output
 
 GRAVITY_MPS2 = 9.80665
+_AXIS_INDEX = {"x": 0, "y": 1, "z": 2}
+Axes = tuple[tuple[int, float], ...]
+
+
+def parse_axes(raw: Any) -> Axes:
+  """`["+x", "-y", "-z"]`: which signed IMU axis points along the robot's x (forward),
+  y (left), and z (up). Mirror images are rejected because no real mounting makes one."""
+  hint = 'axes must list the IMU axis along the robot\'s forward, left, and up directions, e.g. ["+x", "+y", "+z"]'
+  if not isinstance(raw, (list, tuple)) or len(raw) != 3 or not all(isinstance(item, str) for item in raw):
+    raise ValueError(hint)
+  parsed: list[tuple[int, float]] = []
+  for item in raw:
+    text = item.strip().lower()
+    letter = text[1:] if text[:1] in "+-" else text
+    if letter not in _AXIS_INDEX:
+      raise ValueError(hint)
+    parsed.append((_AXIS_INDEX[letter], -1.0 if text.startswith("-") else 1.0))
+  if len({index for index, _ in parsed}) != 3:
+    raise ValueError("axes must use each of x, y, and z once")
+  m = [[0.0] * 3 for _ in range(3)]
+  for row, (col, sign) in enumerate(parsed):
+    m[row][col] = sign
+  det = (
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+    - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+    + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+  )
+  if det < 0:
+    raise ValueError(f"axes {list(raw)} describe a mirror image, which no real mounting produces; flip the sign of one axis")
+  return tuple(parsed)
+
+
+def map_axes(vector: Sequence[float], axes: Axes) -> list[float]:
+  return [sign * vector[index] for index, sign in axes]
+
+
+def format_axes(axes: Axes) -> list[str]:
+  return [("-" if sign < 0 else "+") + "xyz"[index] for index, sign in axes]
 
 
 def _bcm_pin(value: Any, label: str) -> int:
@@ -111,6 +150,8 @@ class MPU6050Imu(LiveNode):
 
   Averages `calibrate_samples` gyro readings at start-up to remove bias, so keep the robot
   still while it starts. Each read is one 14-byte I2C transfer (about 1 ms at 100 kHz).
+  Readings are published in the robot's frame (x forward, y left, z up) using `axes`,
+  which the calibration wizard can work out from two poses.
   """
 
   rate_hz = 50.0
@@ -124,6 +165,7 @@ class MPU6050Imu(LiveNode):
     accel_range_g: int = 2,
     gyro_range_dps: int = 250,
     calibrate_samples: int = 100,
+    axes: list[str] | None = None,
     backend: str = "mock",
   ) -> None:
     if address not in (0x68, 0x69):
@@ -144,10 +186,14 @@ class MPU6050Imu(LiveNode):
     self.resolved_backend: str | None = None
     self.chip: str | None = None
     self.gyro_bias = [0.0, 0.0, 0.0]
+    self.axes = parse_axes(axes if axes is not None else ["+x", "+y", "+z"])
     self.last: dict[str, Any] | None = None
     self._bus: Any = None
     self._accel_lsb_per_g = 32768.0 / accel_range_g
     self._gyro_lsb_per_dps = _GYRO_LSB_PER_DPS[gyro_range_dps]
+    self._raw_accel: deque[list[float]] = deque(maxlen=25)
+    self._flat: list[float] | None = None
+    self._calibrated = False
 
   def _io_error(self, exc: OSError) -> HardwareUnavailable:
     return HardwareUnavailable(
@@ -201,12 +247,15 @@ class MPU6050Imu(LiveNode):
   def tick(self, ctx: NodeContext) -> Iterable[Output] | None:
     if self._bus is None:
       accel, gyro, temp_c = [0.0, 0.0, GRAVITY_MPS2], [0.0, 0.0, 0.0], 25.0
+      self._raw_accel.append(accel)
     else:
       try:
         accel, gyro, temp_c = self._read_raw()
       except OSError as exc:
         raise self._io_error(exc) from exc
       gyro = [g - b for g, b in zip(gyro, self.gyro_bias)]
+      self._raw_accel.append(accel)
+      accel, gyro = map_axes(accel, self.axes), map_axes(gyro, self.axes)
     self.last = {
       "accel_mps2": [round(v, 4) for v in accel],
       "gyro_dps": [round(v, 4) for v in gyro],
@@ -224,6 +273,69 @@ class MPU6050Imu(LiveNode):
       "chip": self.chip,
       "backend": self.resolved_backend or self.backend_name,
       "address": f"0x{self.address:02x}",
+      "axes": format_axes(self.axes),
       "gyro_bias_dps": [round(b, 4) for b in self.gyro_bias],
       "last": self.last,
     }
+
+  # ------------------------------------------------------------------ calibration
+
+  def _mean_accel(self) -> list[float]:
+    if len(self._raw_accel) < 5:
+      raise ValueError("no IMU readings yet; wait a moment and try again")
+    samples = list(self._raw_accel)
+    return [sum(s[i] for s in samples) / len(samples) for i in range(3)]
+
+  def calibrate(self, action: str, args: dict[str, Any], ctx: NodeContext) -> dict[str, Any]:
+    """Two poses find the mounting: `flat` (robot level and still) finds up, then
+    `nose_up` (front lifted about 30 degrees) finds forward; left follows from those."""
+    message = None
+    if action == "flat":
+      mean = self._mean_accel()
+      up = max(range(3), key=lambda i: abs(mean[i]))
+      if not 0.8 * GRAVITY_MPS2 < abs(mean[up]) < 1.2 * GRAVITY_MPS2:
+        raise ValueError("the IMU is not level or not still; set the robot flat, wait a second, and try again")
+      self._flat = mean
+      message = f"up is IMU {'+-'[mean[up] < 0]}{'xyz'[up]}; now lift the front of the robot about 30 degrees and hold it"
+    elif action == "nose_up":
+      if self._flat is None:
+        raise ValueError("capture the flat pose first")
+      flat, mean = self._flat, self._mean_accel()
+      up = max(range(3), key=lambda i: abs(flat[i]))
+      delta = [mean[i] - flat[i] for i in range(3)]
+      forward = max((i for i in range(3) if i != up), key=lambda i: abs(delta[i]))
+      if abs(delta[forward]) < 0.25 * GRAVITY_MPS2:
+        raise ValueError("didn't see the robot tilt; lift the front about 30 degrees, hold it still, and try again")
+      up_vec = [0.0, 0.0, 0.0]
+      up_vec[up] = 1.0 if flat[up] > 0 else -1.0
+      fwd_vec = [0.0, 0.0, 0.0]
+      fwd_vec[forward] = 1.0 if delta[forward] > 0 else -1.0
+      left_vec = [
+        up_vec[1] * fwd_vec[2] - up_vec[2] * fwd_vec[1],
+        up_vec[2] * fwd_vec[0] - up_vec[0] * fwd_vec[2],
+        up_vec[0] * fwd_vec[1] - up_vec[1] * fwd_vec[0],
+      ]
+      signed = [(max(range(3), key=lambda i: abs(v[i])), v) for v in (fwd_vec, left_vec, up_vec)]
+      self.axes = tuple((index, 1.0 if v[index] > 0 else -1.0) for index, v in signed)
+      self._calibrated = True
+      self._flat = None
+      names = format_axes(self.axes)
+      message = f"forward is IMU {names[0]}, left is {names[1]}, up is {names[2]}"
+    elif action == "reset":
+      self.axes = parse_axes(["+x", "+y", "+z"])
+      self._calibrated = True
+      self._flat = None
+    elif action != "describe":
+      raise ValueError(f"unknown IMU calibration action {action!r}")
+    raw = [round(v, 3) for v in self._raw_accel[-1]] if self._raw_accel else None
+    return {
+      "kind": "imu",
+      "chip": self.chip,
+      "axes": format_axes(self.axes),
+      "raw_accel_mps2": raw,
+      "step": "nose_up" if self._flat is not None else "flat",
+      "message": message,
+    }
+
+  def calibration(self) -> dict[str, Any] | None:
+    return {"axes": format_axes(self.axes)} if self._calibrated else None

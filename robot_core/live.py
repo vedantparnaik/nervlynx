@@ -7,7 +7,8 @@ that on top of the same envelopes, topics, and plugins.
 
 Threading model: every node callback runs on the executor thread (the one calling `run()`
 or `step()`), so nodes never need locks. Other threads interact only through
-`publish_external()`, `request_estop()`, `request_estop_clear()`, and `snapshot()`.
+`publish_external()`, `request_estop()`, `request_estop_clear()`, `call_node()`, and
+`snapshot()`.
 """
 
 from __future__ import annotations
@@ -88,6 +89,23 @@ class LiveNode:
   def status(self) -> dict[str, Any]:
     """Extra state surfaced in `/stats` and run reports."""
     return {}
+
+  def calibrate(self, action: str, args: dict[str, Any], ctx: NodeContext) -> dict[str, Any]:
+    """One step of the dashboard's calibration wizard, run on the executor thread.
+
+    `describe` returns what the wizard should show; other actions change settings live
+    (and may move actuators, so they must honour the e-stop). Raise ValueError to reject
+    an action with a message for the operator.
+    """
+    raise ValueError(f"{type(self).__name__} has nothing to calibrate")
+
+  def calibration(self) -> dict[str, Any] | None:
+    """Settings changed by `calibrate`, as a `params` patch for calibration.yaml."""
+    return None
+
+
+def supports_calibration(node: LiveNode) -> bool:
+  return type(node).calibrate is not LiveNode.calibrate
 
 
 class NodeContext:
@@ -463,6 +481,25 @@ class LiveRuntime(PipelineRuntime):
       self._inbox.append(("clear", source))
     self._wake.set()
 
+  def call_node(self, name: str, fn: Callable[[LiveNode, NodeContext], Any], *, timeout_s: float = 2.0) -> Any:
+    """Run `fn(node, ctx)` on the executor thread and return its result (from any thread).
+
+    Exceptions raised by `fn` are re-raised here. Raises TimeoutError when the executor
+    does not get to it within `timeout_s` (for example because the runtime has stopped).
+    """
+    if name not in self._slots:
+      raise LiveRuntimeError(f"no node named {name!r}")
+    done = threading.Event()
+    box: dict[str, Any] = {}
+    with self._inbox_lock:
+      self._inbox.append(("call", (name, fn, box, done)))
+    self._wake.set()
+    if not done.wait(timeout_s):
+      raise TimeoutError(f"node {name} did not answer within {timeout_s} s (is the runtime running?)")
+    if "error" in box:
+      raise box["error"]
+    return box.get("result")
+
   def stop(self) -> None:
     """Ask `run()` to return after the current step.
 
@@ -688,6 +725,15 @@ class LiveRuntime(PipelineRuntime):
         self._engage_estop(reason, source=source)
       elif kind == "clear":
         self._clear_estop(source=data)
+      elif kind == "call":
+        name, fn, box, done = data
+        slot = self._slots[name]
+        try:
+          box["result"] = fn(slot.node, slot.ctx)
+        except Exception as exc:  # handed back to the caller
+          box["error"] = exc
+        finally:
+          done.set()
     for topic, schema, payload, source in latest:
       self._emit(source, topic, schema, payload, None)
 

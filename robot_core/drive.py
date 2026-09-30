@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 import threading
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from typing import Any, Iterable
 
 from robot_core.hardware import BACKENDS, DRIVERS, Motor, PinBackend, build_motor, create_backend, validate_motor_specs
@@ -126,8 +126,17 @@ class SideShaper:
     return self.applied
 
 
+_TEST_MOVES = {"forward": (1.0, 1.0), "backward": (-1.0, -1.0), "left": (-1.0, 1.0), "right": (1.0, -1.0)}
+_MAX_TEST_S = 3.0
+_CALIBRATED_TUNING = ("min_duty", "turn_min_duty")
+
+
 class SkidSteerDrive(LiveNode):
-  """Actuator node for a skid-steer rover (any number of motors per side)."""
+  """Actuator node for a skid-steer rover (any number of motors per side).
+
+  `swap_sides: true` means the motors listed under `left` are on the robot's right (the
+  calibration wizard sets it when "turn left" turns right).
+  """
 
   def __init__(
     self,
@@ -143,6 +152,7 @@ class SkidSteerDrive(LiveNode):
     max_speed: float = 1.0,
     state_every_n_ticks: int = 2,
     tuning: dict[str, Any] | None = None,
+    swap_sides: bool = False,
   ) -> None:
     if backend not in BACKENDS:
       raise ValueError(f"unknown backend {backend!r}; expected one of {', '.join(BACKENDS)}")
@@ -159,6 +169,9 @@ class SkidSteerDrive(LiveNode):
       raise ValueError("max_speed must be in (0, 1]")
     if state_every_n_ticks < 1:
       raise ValueError("state_every_n_ticks must be >= 1")
+    if not isinstance(swap_sides, bool):
+      raise ValueError("swap_sides must be true or false")
+    self.swap_sides = swap_sides
     self.input_topics = (command_topic,)
     self.left_specs = [dict(spec) for spec in left]
     self.right_specs = [dict(spec) for spec in right]
@@ -192,6 +205,8 @@ class SkidSteerDrive(LiveNode):
     self._kicks_reported = [0, 0]
     self._gauges: dict[str, Any] = {}
     self._counters: dict[str, Any] = {}
+    self._test: dict[str, Any] | None = None
+    self._calibrated: set[str] = set()
 
   # ------------------------------------------------------------------ lifecycle
 
@@ -205,6 +220,8 @@ class SkidSteerDrive(LiveNode):
     except Exception:
       self.backend.close()
       raise
+    if self.swap_sides:
+      self.left_motors, self.right_motors = self.right_motors, self.left_motors
     self._stop_motors()
     m = ctx.metrics
     for side in ("left", "right"):
@@ -232,6 +249,7 @@ class SkidSteerDrive(LiveNode):
 
   def safe_stop(self, ctx: NodeContext) -> None:
     now_s = ctx.now_ns / 1e9
+    self._test = None
     self._left.reset(now_s)
     self._right.reset(now_s)
     self._target = (0.0, 0.0)
@@ -245,6 +263,7 @@ class SkidSteerDrive(LiveNode):
   def hard_stop(self) -> None:
     with self._hard_lock:
       self._hard_stopped = True
+      self._test = None
     self._stop_motors()
 
   # ------------------------------------------------------------------ control
@@ -261,6 +280,9 @@ class SkidSteerDrive(LiveNode):
       return None
     if ctx.estop_engaged:
       return None
+    if self._test is not None:
+      self._end_test(ctx.now_ns / 1e9)
+      ctx.fault("calibration test stopped: a drive command arrived", severity="info", kind="calibration")
     self._target = parsed
     self._last_cmd_ns = ctx.now_ns
     self._cmd_trace = msg.envelope.trace_id
@@ -286,6 +308,12 @@ class SkidSteerDrive(LiveNode):
         self._saw_estop = False
         self._hard_stopped = False
       halted = self._hard_stopped or ctx.estop_engaged
+
+    if self._test is not None:
+      if halted or now_ns >= self._test["until_ns"]:
+        self._end_test(now_s)
+      else:
+        return self._run_test(ctx)
 
     left, right = self._target
     fresh = self._last_cmd_ns is not None and now_ns - self._last_cmd_ns <= self.deadman_ns
@@ -338,7 +366,133 @@ class SkidSteerDrive(LiveNode):
       "rejected_commands": self._rejected,
       "kicks": {"left": self._left.kicks, "right": self._right.kicks},
       "hard_stopped": self._hard_stopped,
+      "testing": self._test["label"] if self._test is not None else None,
     }
+
+  # ------------------------------------------------------------------ calibration
+
+  def calibrate(self, action: str, args: dict[str, Any], ctx: NodeContext) -> dict[str, Any]:
+    """Wizard actions: describe, spin (one motor), test (forward/backward/left/right),
+    stop, invert, swap_sides, tuning. Tests run for at most 3 s and stop on any command."""
+    motors = {m.name: m for m in self.left_motors + self.right_motors}
+    if action == "describe":
+      pass
+    elif action == "stop":
+      self._end_test(ctx.now_ns / 1e9)
+    elif action == "invert":
+      motor = motors.get(str(args.get("motor")))
+      if motor is None:
+        raise ValueError(f"no motor named {args.get('motor')!r}; motors: {', '.join(motors)}")
+      motor.invert = bool(args["value"]) if "value" in args else not motor.invert
+      self._calibrated.add(f"invert:{motor.name}")
+    elif action == "swap_sides":
+      value = bool(args.get("value", not self.swap_sides))
+      if value != self.swap_sides:
+        self.left_motors, self.right_motors = self.right_motors, self.left_motors
+        self.swap_sides = value
+      self._calibrated.add("swap_sides")
+    elif action == "tuning":
+      changes = {key: float(args[key]) for key in _CALIBRATED_TUNING if key in args}
+      if not changes:
+        raise ValueError(f"tuning needs one of: {', '.join(_CALIBRATED_TUNING)}")
+      self.tuning = DriveTuning.from_dict({**asdict(self.tuning), **changes})
+      self._left.tuning = self._right.tuning = self.tuning
+      self._calibrated.update(f"tuning:{key}" for key in changes)
+    elif action in ("spin", "test"):
+      self._start_test(action, args, motors, ctx)
+    else:
+      raise ValueError(f"unknown drive calibration action {action!r}")
+    return self._describe(ctx)
+
+  def calibration(self) -> dict[str, Any] | None:
+    by_name = {m.name: m for m in self.left_motors + self.right_motors}
+    patch: dict[str, Any] = {}
+    for side, specs in (("left", self.left_specs), ("right", self.right_specs)):
+      items = [
+        {"name": spec["name"], "invert": by_name[spec["name"]].invert}
+        for spec in specs
+        if isinstance(spec.get("name"), str) and f"invert:{spec['name']}" in self._calibrated
+      ]
+      if items:
+        patch[side] = items
+    if "swap_sides" in self._calibrated:
+      patch["swap_sides"] = self.swap_sides
+    tuning = {key: getattr(self.tuning, key) for key in _CALIBRATED_TUNING if f"tuning:{key}" in self._calibrated}
+    if tuning:
+      patch["tuning"] = tuning
+    return patch or None
+
+  def _describe(self, ctx: NodeContext) -> dict[str, Any]:
+    named = all(isinstance(spec.get("name"), str) for spec in self.left_specs + self.right_specs)
+    return {
+      "kind": "drive",
+      "sides": {
+        side: [{"name": m.name, "invert": m.invert} for m in motors]
+        for side, motors in (("left", self.left_motors), ("right", self.right_motors))
+      },
+      "swap_sides": self.swap_sides,
+      "tuning": {key: getattr(self.tuning, key) for key in _CALIBRATED_TUNING},
+      "max_speed": self.max_speed,
+      "testing": self._test["label"] if self._test is not None else None,
+      "estop": ctx.estop_engaged,
+      "savable": named,
+    }
+
+  def _start_test(self, action: str, args: dict[str, Any], motors: dict[str, Motor], ctx: NodeContext) -> None:
+    if ctx.estop_engaged or self._hard_stopped:
+      raise ValueError("clear the e-stop first; the wheels will turn")
+    try:
+      duty = float(args.get("duty", 0.4))
+      seconds = float(args.get("seconds", 1.0))
+    except (TypeError, ValueError):
+      raise ValueError("duty and seconds must be numbers") from None
+    if not 0.0 < duty <= 1.0:
+      raise ValueError("duty must be in (0, 1]")
+    duty = min(duty, self.max_speed)
+    seconds = max(0.1, min(seconds, _MAX_TEST_S))
+    if action == "spin":
+      name = str(args.get("motor"))
+      if name not in motors:
+        raise ValueError(f"no motor named {name!r}; motors: {', '.join(motors)}")
+      test: dict[str, Any] = {"motor": name, "duty": duty, "label": f"spin {name} forward at {duty:.2f}"}
+    else:
+      move = str(args.get("move", "forward"))
+      if move not in _TEST_MOVES:
+        raise ValueError(f"move must be one of {', '.join(_TEST_MOVES)}")
+      left, right = _TEST_MOVES[move]
+      test = {"left": left * duty, "right": right * duty, "label": f"drive {move} at {duty:.2f}"}
+    self._target = (0.0, 0.0)
+    self._last_cmd_ns = None
+    test["until_ns"] = ctx.now_ns + int(seconds * 1e9)
+    self._test = test
+
+  def _run_test(self, ctx: NodeContext) -> None:
+    test = self._test
+    assert test is not None
+    if "motor" in test:
+      for motor in self.left_motors + self.right_motors:
+        motor.drive(test["duty"] if motor.name == test["motor"] else 0.0)
+      on_left = any(m.name == test["motor"] for m in self.left_motors)
+      left, right = (test["duty"], 0.0) if on_left else (0.0, test["duty"])
+    else:
+      left, right = test["left"], test["right"]
+      for motor in self.left_motors:
+        motor.drive(left)
+      for motor in self.right_motors:
+        motor.drive(right)
+    self._publish_metrics(left, right, ctx.now_ns)
+    payload = self._state_payload(left, right, False)
+    payload.update({"left_applied": round(left, 4), "right_applied": round(right, 4), "test": test["label"]})
+    ctx.publish(self.state_topic, "DriveState", payload)
+    return None
+
+  def _end_test(self, now_s: float) -> None:
+    if self._test is None:
+      return
+    self._test = None
+    self._left.reset(now_s)
+    self._right.reset(now_s)
+    self._stop_motors()
 
   # ------------------------------------------------------------------ helpers
 
