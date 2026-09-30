@@ -1,0 +1,27 @@
+name: rover_tb6612
+description: >
+  Four-motor car on two TB6612FNG boards (TB1 front axle, TB2 rear axle), the platform
+  from the May 2026 evaluation session. STBY is shared by the two channels of each board.
+    robot-core run-live examples/live/rover_tb6612.yaml --host 0.0.0.0 --allow-control
+
+safety:
+  stale_after_s: 0.3
+
+hardware:
+  backend: gpiozero
+
+nodes:
+  - name: drive
+    plugin: skid_steer_drive
+    rate_hz: 50
+    critical: true
+    params:
+      driver: tb6612
+      deadman_s: 0.25
+      max_speed: 0.6
+      left:
+        - {name: FL, in1: 22, in2: 23, pwm: 13, stby: 25}
+        - {name: RL, in1: 5, in2: 6, pwm: 12, stby: 24}
+      right:
+        - {name: FR, in1: 17, in2: 27, pwm: 18, stby: 25}
+        - {name: RR, in1: 19, in2: 26, pwm: 16, stby: 24}

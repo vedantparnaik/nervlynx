@@ -1,0 +1,42 @@
+name: rover_bts7960
+description: >
+  4-motor skid-steer rover, one HiLetgo BTS7960 (IBT-2) per motor, R_EN/L_EN/VCC tied to
+  3.3 V. Pin map, inversions, and drive tuning match the follow-me rover's teleop server.
+  Put the chassis on blocks for the first run, then on the Pi:
+    robot-core run-live examples/live/rover_bts7960.yaml --host 0.0.0.0 --allow-control
+  and drive from http://<pi-ip>:9120/ (WASD). max_speed caps every command at 60 %;
+  raise it once the rover behaves.
+
+runtime:
+  stall_timeout_s: 0.3
+
+safety:
+  stale_after_s: 0.3
+
+hardware:
+  backend: rpi_gpio
+
+nodes:
+  - name: drive
+    plugin: skid_steer_drive
+    rate_hz: 50
+    critical: true
+    params:
+      driver: bts7960
+      pwm_frequency_hz: 1000
+      deadman_s: 0.25
+      max_speed: 0.6
+      tuning:
+        min_duty: 0.18
+        turn_min_duty: 0.26
+        kick_duty: 0.55
+        kick_s: 0.18
+        kick_rearm_s: 0.5
+        slew_per_s: 4.0
+      left:
+        - {name: FL, rpwm: 12, lpwm: 13}
+        - {name: RL, rpwm: 5, lpwm: 6}
+      # Right-side motors are mounted mirrored.
+      right:
+        - {name: FR, rpwm: 18, lpwm: 19, invert: true}
+        - {name: RR, rpwm: 16, lpwm: 20, invert: true}
