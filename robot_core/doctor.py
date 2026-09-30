@@ -6,7 +6,6 @@ Every probe goes through `System`, so the checks can run against a simulated mac
 
 from __future__ import annotations
 
-import fnmatch
 import glob
 import os
 import platform

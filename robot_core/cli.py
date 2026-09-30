@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
-import signal
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -21,17 +19,15 @@ from robot_core.dashboard import serve_dashboard
 from robot_core.distributed import DistributedNodeConfig, DistributedNodeRunner
 from robot_core.examples import build_reference_runtime
 from robot_core.graph import load_graph_config, validate_graph_config, wire_graph_from_config
-from robot_core.live import LiveRuntimeError
-from robot_core.live_config import build_live_runtime, clock_for_config, validate_live_config
+from robot_core.live_config import MODES, uses_modes, validate_live_config
 from robot_core.metrics import MetricsRegistry, serve_metrics
 from robot_core.observability import flow_stats, topic_latency_stats
 from robot_core.plugins import PluginRegistry
-from robot_core.recorder import read_jsonl, write_jsonl
 from robot_core.project import build_registry, load_project
-from robot_core.report import FaultLog, TraceRecorder, build_report, render_markdown
+from robot_core.recorder import read_jsonl, write_jsonl
 from robot_core.runtime import PipelineRuntime
 from robot_core.security import TopicAccessPolicy, sign_payload
-from robot_core.server import serve_live
+from robot_core.session import SessionOptions, run_session
 from robot_core.smoke_matrix import run_smoke_matrix
 from robot_core.smoke_surveillance import run_surveillance_smoke
 from robot_core.supervisor import ManagedNode, RuntimeSupervisor
@@ -370,7 +366,7 @@ def live_validate(
   configs: list[Path],
   backend: Optional[str] = typer.Option(None, "--backend", help="Validate as if every node used this hardware backend."),
 ) -> None:
-  """Validate live graph configs without touching hardware."""
+  """Validate live graph configs without touching hardware (each mode when a config uses `only:`)."""
   ok = True
   for config in configs:
     try:
@@ -379,7 +375,11 @@ def live_validate(
       typer.echo(f"{config}: config_error: {exc}")
       ok = False
       continue
-    issues = problems + validate_live_config(cfg, reg, backend_override=backend)
+    modes = MODES if uses_modes(cfg) else (None,)
+    issues = list(problems)
+    for mode in modes:
+      label = f"[{mode}] " if mode else ""
+      issues += [label + issue for issue in validate_live_config(cfg, reg, backend_override=backend, mode=mode)]
     if issues:
       ok = False
       for issue in issues:
@@ -393,6 +393,7 @@ def live_validate(
 @app.command("run-live")
 def run_live(
   config: Path = typer.Argument(..., help="Live graph YAML, e.g. examples/live/rover_sim.yaml."),
+  mode: str = typer.Option("robot", "--mode", help="robot or sim: which `only:` nodes run. sim also forces mock pins unless --backend is given."),
   duration_s: Optional[float] = typer.Option(None, "--duration-s", help="Stop after this much runtime-clock time (default: until Ctrl-C)."),
   sim_time: bool = typer.Option(False, "--sim-time", help="Simulated clock: runs as fast as possible and is deterministic."),
   backend: Optional[str] = typer.Option(None, "--backend", help="Override the hardware backend of every node: mock, rpi_gpio, gpiozero, auto."),
@@ -409,103 +410,27 @@ def run_live(
   quiet: bool = typer.Option(False, "--quiet", help="Do not print the Markdown report at exit."),
 ) -> None:
   """Run a live graph continuously with dashboard, trace recording, and an end-of-run report."""
-  try:
-    cfg, reg, problems = load_project(config)
-  except (OSError, ValueError, yaml.YAMLError) as exc:
-    typer.echo(f"{config}: config_error: {exc}")
-    raise typer.Exit(code=1)
-  issues = problems + validate_live_config(cfg, reg, backend_override=backend)
-  if issues:
-    for issue in issues:
-      typer.echo(f"{config}: config_error: {issue}")
-    raise typer.Exit(code=1)
-  clock = clock_for_config(cfg, simulated=sim_time)
-  if clock.simulated and duration_s is None:
-    typer.echo("config_error: --duration-s is required with a simulated clock")
+  if mode not in MODES:
+    typer.echo(f"config_error: --mode must be one of {', '.join(MODES)}")
     raise typer.Exit(code=2)
-  runtime = build_live_runtime(cfg, reg, clock=clock, backend_override=backend)
-
-  out_dir = run_dir or Path("logs/live") / f"{runtime.name}-{time.strftime('%Y%m%d-%H%M%S')}"
-  out_dir.mkdir(parents=True, exist_ok=True)
-  shutil.copyfile(config, out_dir / "config.yaml")
-  fault_log = FaultLog(out_dir / "faults.jsonl")
-  runtime.add_fault_listener(fault_log)
-  recorder = None
-  if not no_record:
-    recorder = TraceRecorder(out_dir / "trace.jsonl", exclude_topics=record_exclude)
-    runtime.add_message_listener(recorder)
-
-  server = None
-  if not no_server and not clock.simulated:
-    try:
-      server = serve_live(
-        runtime,
-        host=host,
-        port=port,
-        allow_control=allow_control,
-        control_topics=control_topic,
-        control_token=control_token,
-      )
-    except OSError as exc:
-      fault_log.close()
-      if recorder is not None:
-        recorder.close()
-      typer.echo(f"dashboard_error: cannot listen on {host}:{port}: {exc}")
-      raise typer.Exit(code=1)
-    shown = "127.0.0.1" if host in ("0.0.0.0", "") else host
-    typer.echo(f"dashboard=http://{shown}:{port}/ metrics=http://{shown}:{port}/metrics control={'on' if allow_control else 'off'}")
-
-  previous: dict[int, Any] = {}
-  for sig in (signal.SIGINT, signal.SIGTERM):
-    try:
-      previous[sig] = signal.signal(sig, lambda *_: runtime.stop())
-    except ValueError:  # not on the main thread
-      pass
-  typer.echo(f"run_live_started graph={runtime.name} clock={'simulated' if clock.simulated else 'system'} run_dir={out_dir}")
-  wall_started = time.time()
-  exit_code = 0
-  try:
-    runtime.run(duration_s=duration_s)
-  except LiveRuntimeError as exc:
-    typer.echo(f"run_live_error: {exc}")
-    exit_code = 1
-  finally:
-    for sig, handler in previous.items():
-      signal.signal(sig, handler)
-    if server is not None:
-      server.shutdown()
-      server.server_close()
-    if recorder is not None:
-      recorder.close()
-    fault_log.close()
-  wall_finished = time.time()
-
-  artifacts = {"config": str(out_dir / "config.yaml"), "faults": str(out_dir / "faults.jsonl")}
-  if recorder is not None:
-    artifacts["trace"] = str(recorder.path)
-  artifacts.update({"report_json": str(out_dir / "report.json"), "report_md": str(out_dir / "report.md"), "metrics": str(out_dir / "metrics.prom")})
-  report = build_report(
-    runtime,
-    config_path=config,
-    wall_started=wall_started,
-    wall_finished=wall_finished,
-    artifacts=artifacts,
-    extra={"trace_messages": recorder.written if recorder else 0, "fault_log_entries": fault_log.count},
+  opts = SessionOptions(
+    mode=mode,
+    duration_s=duration_s,
+    sim_time=sim_time,
+    backend=backend,
+    host=host,
+    port=port,
+    no_server=no_server,
+    allow_control=allow_control,
+    control_topics=control_topic,
+    control_token=control_token,
+    run_dir=run_dir,
+    no_record=no_record,
+    record_exclude=record_exclude,
+    strict=strict,
+    quiet=quiet,
   )
-  (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
-  markdown = render_markdown(report)
-  (out_dir / "report.md").write_text(markdown, encoding="utf-8")
-  (out_dir / "metrics.prom").write_text(runtime.metrics.render_prometheus(), encoding="utf-8")
-  if not quiet:
-    typer.echo(markdown)
-  health = report["health"]["status"]
-  typer.echo(f"run_live_done graph={runtime.name} status={health} messages={report['messages']['published']} report={out_dir / 'report.json'}")
-  if exit_code == 0 and strict:
-    kinds = report["faults"]["by_kind"]
-    if any(kinds.get(k) for k in ("node_error", "watchdog", "stall", "estop", "setup_failed")):
-      typer.echo("run_live_strict=fail")
-      exit_code = 2
-  raise typer.Exit(code=exit_code)
+  raise typer.Exit(code=run_session(config, opts, typer.echo))
 
 
 def _fmt_top(stats: dict[str, Any], url: str) -> str:
