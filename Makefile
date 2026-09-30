@@ -1,4 +1,4 @@
-.PHONY: help demo setup test compile check preflight graph-smoke graph-doctor graph-validate graph-validate-core graph-validate-file graph-list-core graph-list-core-json graph-list-core-verify graph-list-core-verify-json graph-run-core graph-run-file replay-check cpp-smoke graph-example run-example replay clean-logs clean-venv
+.PHONY: help demo setup test compile check preflight graph-smoke graph-doctor graph-validate graph-validate-core graph-validate-file graph-list-core graph-list-core-json graph-list-core-verify graph-list-core-verify-json graph-run-core graph-run-file replay-check cpp-smoke graph-example run-example replay live-validate live-demo live-sim bench-live clean-logs clean-venv
 
 VENV_DIR ?= .venv
 PYTHON ?= python3
@@ -9,6 +9,8 @@ ROBOT_CORE := $(VENV_DIR)/bin/robot-core
 RUN_PYTHON := $(if $(wildcard $(VENV_DIR)/bin/python),$(VENV_DIR)/bin/python,$(PYTHON))
 GRAPH ?= examples/robot_packs/surveillance.yaml
 GRAPH_OUTPUT ?= logs/graph_file_trace.jsonl
+LIVE_GRAPH ?= examples/live/rover_sim.yaml
+LIVE_DURATION ?= 30
 
 help:
 	@echo "NervLynx developer shortcuts"
@@ -36,6 +38,10 @@ help:
 	@echo "  make graph-example Run surveillance example graph (implies setup if venv missing)"
 	@echo "  make run-example Run the basic runtime demo"
 	@echo "  make replay     Replay the latest demo trace"
+	@echo "  make live-validate Validate every live graph in examples/live"
+	@echo "  make live-demo  Run LIVE_GRAPH (default rover_sim) with the dashboard on :9120"
+	@echo "  make live-sim   Run LIVE_GRAPH on a simulated clock for LIVE_DURATION seconds"
+	@echo "  make bench-live Benchmark live dispatch cost and tick precision"
 	@echo "  make clean-venv Remove local virtual environment"
 
 demo: setup run-example replay
@@ -122,6 +128,22 @@ run-example:
 
 replay:
 	$(ROBOT_CORE) replay logs/robot_core_trace.jsonl
+
+live-validate:
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	$(ROBOT_CORE) live-validate examples/live/*.yaml
+
+live-demo:
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	$(ROBOT_CORE) run-live "$(LIVE_GRAPH)" --duration-s "$(LIVE_DURATION)" --allow-control
+
+live-sim:
+	@if [ ! -x "$(ROBOT_CORE)" ]; then $(MAKE) setup; fi
+	$(ROBOT_CORE) run-live "$(LIVE_GRAPH)" --sim-time --duration-s "$(LIVE_DURATION)"
+
+bench-live:
+	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then $(MAKE) setup; fi
+	$(RUN_PYTHON) benchmarks/benchmark_live.py --output-json logs/benchmark_live.json
 
 clean-logs:
 	rm -f logs/*.jsonl logs/**/*.jsonl 2>/dev/null || true

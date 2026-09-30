@@ -56,6 +56,15 @@ jobs:
       - name: Benchmark baseline check
         if: matrix.python-version == '3.11'
         run: python benchmarks/benchmark_runtime.py --loops 5000 --output-json logs/benchmark_runtime.json --baseline benchmarks/baselines/reference_runtime_v0.2.0.json --max-regression-pct 35
+      - name: Validate live graphs
+        if: matrix.python-version == '3.11'
+        run: robot-core live-validate examples/live/*.yaml
+      - name: Live rover simulation (strict)
+        if: matrix.python-version == '3.11'
+        run: robot-core run-live examples/live/rover_sim.yaml --sim-time --duration-s 30 --run-dir logs/live/rover_sim --strict --quiet
+      - name: Live executor benchmark
+        if: matrix.python-version == '3.11'
+        run: python benchmarks/benchmark_live.py --tick-seconds 2 --output-json logs/benchmark_live.json
       - name: Upload production-confidence artifacts
         if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v6
@@ -63,8 +72,11 @@ jobs:
           name: production-confidence-${{ github.run_id }}
           path: |
             logs/benchmark_runtime.json
+            logs/benchmark_live.json
             logs/replay_actual_trace.jsonl
             logs/core_graph_runs/*.jsonl
+            logs/live/rover_sim/report.json
+            logs/live/rover_sim/report.md
 
   cpp-tests:
     runs-on: ubuntu-latest
