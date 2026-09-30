@@ -18,6 +18,7 @@ from robot_core.runtime import RuntimeMessage
 
 _EPS = 1e-12
 _CONTACT_RELEASE_M = 0.01
+_BEAM_RAYS = 9
 
 
 @dataclass(frozen=True)
@@ -165,17 +166,21 @@ class SimWorld:
 
 @dataclass(frozen=True)
 class RangeSensorSpec:
+  """A simulated ranger. Ultrasonic sensors report the nearest echo inside a cone
+  (`beam_deg`, about 30 for an HC-SR04); 0 models a single ray like a narrow ToF sensor."""
+
   name: str
   angle_rad: float
   max_range_m: float
   noise_m: float
   topic: str
+  beam_rad: float = 0.0
 
   @classmethod
   def parse(cls, raw: Any, idx: int) -> RangeSensorSpec:
     if not isinstance(raw, dict):
       raise ValueError(f"range_sensors[{idx}] must be a mapping")
-    unknown = sorted(set(raw) - {"name", "angle_deg", "max_range_m", "noise_m", "topic"})
+    unknown = sorted(set(raw) - {"name", "angle_deg", "max_range_m", "noise_m", "topic", "beam_deg"})
     if unknown:
       raise ValueError(f"range_sensors[{idx}]: unknown fields {', '.join(unknown)}")
     name = raw.get("name")
@@ -183,9 +188,25 @@ class RangeSensorSpec:
       raise ValueError(f"range_sensors[{idx}].name must be a non-empty string")
     max_range = float(raw.get("max_range_m", 2.0))
     noise = float(raw.get("noise_m", 0.0))
+    beam = float(raw.get("beam_deg", 0.0))
     if max_range <= 0 or noise < 0:
       raise ValueError(f"range_sensors[{idx}] ({name}): max_range_m must be > 0 and noise_m >= 0")
-    return cls(name, math.radians(float(raw.get("angle_deg", 0.0))), max_range, noise, str(raw.get("topic", f"range.{name}")))
+    if not 0.0 <= beam <= 120.0:
+      raise ValueError(f"range_sensors[{idx}] ({name}): beam_deg must be between 0 and 120")
+    return cls(
+      name,
+      math.radians(float(raw.get("angle_deg", 0.0))),
+      max_range,
+      noise,
+      str(raw.get("topic", f"range.{name}")),
+      math.radians(beam),
+    )
+
+  def ray_angles(self) -> list[float]:
+    if self.beam_rad == 0.0:
+      return [self.angle_rad]
+    half = self.beam_rad / 2
+    return [self.angle_rad - half + self.beam_rad * i / (_BEAM_RAYS - 1) for i in range(_BEAM_RAYS)]
 
 
 class ScriptedDriveSource(LiveNode):
@@ -419,10 +440,10 @@ class SkidSteerSim(LiveNode):
     assert self.world is not None
     readings: list[Output] = []
     for sensor in self.sensors:
-      angle = self.heading_rad + sensor.angle_rad
-      ox = self.x_m + self.robot_radius_m * math.cos(angle)
-      oy = self.y_m + self.robot_radius_m * math.sin(angle)
-      true_m = self.world.ray(ox, oy, angle, math.inf)
+      mount = self.heading_rad + sensor.angle_rad
+      ox = self.x_m + self.robot_radius_m * math.cos(mount)
+      oy = self.y_m + self.robot_radius_m * math.sin(mount)
+      true_m = min(self.world.ray(ox, oy, self.heading_rad + angle, math.inf) for angle in sensor.ray_angles())
       measured = true_m + (self._rng.gauss(0.0, sensor.noise_m) if sensor.noise_m else 0.0)
       distance = min(max(measured, 0.0), sensor.max_range_m)
       self.ranges[sensor.name] = round(distance, 4)

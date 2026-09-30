@@ -71,6 +71,18 @@ def test_range_sensors_see_the_obstacle_get_closer() -> None:
   assert left[-1].payload == {"distance_m": 0.5, "max_range_m": 0.5, "hit": False}
 
 
+def test_beam_width_sees_obstacles_a_single_ray_misses() -> None:
+  world = {"width_m": 4.0, "height_m": 3.0, "obstacles": [{"circle": [2.0, 1.7, 0.1]}]}
+  narrow = SkidSteerSim(world=world, start=[1.0, 1.5, 0.0], range_sensors=[{"name": "front", "max_range_m": 2.0}])
+  wide = SkidSteerSim(world=world, start=[1.0, 1.5, 0.0], range_sensors=[{"name": "front", "max_range_m": 2.0, "beam_deg": 30}])
+  run_plant(narrow, 0.0, 0.0, seconds=0.1)
+  run_plant(wide, 0.0, 0.0, seconds=0.1)
+  assert narrow.ranges["front"] == 2.0
+  assert wide.ranges["front"] < 1.0
+  with pytest.raises(ValueError, match="beam_deg"):
+    SkidSteerSim(world=world, range_sensors=[{"name": "front", "beam_deg": 200}])
+
+
 def test_sensor_noise_is_repeatable_for_a_seed() -> None:
   def readings(seed: int) -> list[float]:
     plant = SkidSteerSim(world=ARENA, start=[1.0, 1.5, 0.0], range_sensors=[{"name": "front", "noise_m": 0.02}], seed=seed)
