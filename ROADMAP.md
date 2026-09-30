@@ -46,6 +46,24 @@
 - [ ] Bridge live graphs across processes over `ZmqJsonTransport`.
 - [ ] Live executor parity in the C++ runtime.
 
+### M6 - Edge-first, beginner-friendly
+Phase 1 (Raspberry Pi 4/5) and most of phase 2 are in:
+- [x] Core install is PyYAML + Typer; ZMQ and Cap'n Proto are extras (nothing to compile on a Zero 2 W).
+- [x] `hardware.backend: auto` (gpiozero/lgpio on any Pi including the Pi 5, mock elsewhere).
+- [x] `nervlynx doctor`, `scan`, `new` (obstacle-avoider, teleop), `validate`, `sim`, `run`, `deploy`, `logs`, `pull`.
+- [x] `@node` functions in `nodes/*.py`; stale inputs pause the node; `only: sim|robot` for one config in both places.
+- [x] 2D sim world with ultrasonic-style range sensors and collisions; dashboard world view, touch joystick, camera streams.
+- [x] L298N, HC-SR04, MPU6050, and camera (picamera2/OpenCV) nodes with mock twins; latest-value topics and a bounded inbox.
+
+Next, in board order:
+- [ ] Zero 2 W as a first-class target: memory budget, lazy imports in `robot_core/__init__`, low-res camera profile, self-hosted Pi CI runners.
+- [ ] Calibration wizard in the dashboard (motor direction, IMU orientation, servo limits); PCA9685 servos; GPS; RPLidar/LD19 driver with a scan view.
+- [ ] ESP32/Pico co-processor firmware (browser flashing, encoders and wheel PID at 1 kHz, its own motor watchdog) and closed-loop drive.
+- [ ] Device mesh over Zenoh (laptop, Pi, ESP32 via zenoh-pico, Orin) with `placement:` for nodes.
+- [ ] Orin NX: detector node (CPU, Hailo, TensorRT backends), follow-me template, ROS 2 bridge for SLAM/Nav2.
+- [ ] Voice/LLM agents that call named skills, gated by the same safety layers.
+- [ ] Teams: fleet deploys with rollback, per-robot overlays, a flashable SD image, remote access.
+
 ## Good first issues
 
 Issues tagged **`good first issue`** and **`help wanted`** are curated for newcomers. Ideas if none are open:

@@ -1,11 +1,68 @@
 # NervLynx
 
-[![10-minute demo](https://img.shields.io/badge/quickstart-10--minute%20demo-2ea44f)](#quick-start-10-minute-path)
+[![robot in 5 minutes](https://img.shields.io/badge/quickstart-robot%20in%205%20minutes-2ea44f)](#build-a-robot-in-5-minutes)
 [![getting started paths](https://img.shields.io/badge/docs-getting%20started-1f6feb)](docs/GETTING_STARTED.md)
 [![ci](https://github.com/vedantparnaik/nervlynx/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vedantparnaik/nervlynx/actions/workflows/ci.yml)
 
-NervLynx is an open, modular robotics runtime framework for building reliable and observable robot pipelines.
-It helps teams move from ad-hoc prototype scripts to production-style architecture with typed contracts, lifecycle control, traceability, and repeatable validation.
+NervLynx is a lightweight robot runtime for Raspberry Pi-class boards. Write your robot's
+behaviour as plain Python functions, try it in a simulator on your laptop, then run the
+same project on the robot, with motor safety, a phone-friendly dashboard, and a report of
+every run built in. No ROS required, and nothing to compile on a Pi Zero 2 W.
+
+## Build a robot in 5 minutes
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install "git+https://github.com/vedantparnaik/nervlynx"
+nervlynx new my-rover            # or: --template teleop  (see: nervlynx new --list)
+cd my-rover
+nervlynx sim                     # open http://127.0.0.1:9120/
+```
+
+The obstacle-avoider template drives a simulated two-wheel robot around a room with a
+distance sensor; the dashboard draws the room, the robot, and what its sensor sees.
+Change the behaviour in `nodes/avoid.py`: it is an ordinary function.
+
+```python
+from nervlynx import node
+
+
+@node(inputs=["range.front"], outputs="cmd.drive", rate_hz=20)
+def avoid(front, *, stop_m=0.4):
+  if front["distance_m"] < stop_m:
+    return {"linear": 0.0, "angular": 0.6}
+  return {"linear": 0.45, "angular": 0.0}
+```
+
+`nervlynx sim --fast --duration-s 60 --strict` runs a repeatable simulated minute and fails
+if the robot hits anything, which makes a good test.
+
+## Put it on a Raspberry Pi
+
+On the Pi (Raspberry Pi OS Bookworm; Pi 5, Pi 4, and Zero 2 W):
+
+```bash
+sudo apt install -y git python3-venv python3-gpiozero python3-lgpio python3-smbus2 python3-picamera2
+python3 -m venv --system-site-packages ~/.venv        # lets the venv use those apt packages
+~/.venv/bin/pip install "git+https://github.com/vedantparnaik/nervlynx"
+~/.venv/bin/nervlynx doctor                           # GPIO, I2C, camera, power, permissions
+~/.venv/bin/nervlynx scan                             # finds sensors and suggests nodes
+```
+
+Wire it as the project's `README.md` shows, then from your laptop:
+
+```bash
+nervlynx deploy pi@my-rover.local --remote-nervlynx '~/.venv/bin/nervlynx' --service
+```
+
+That copies the project, checks it on the robot, and starts it (and at every boot). The
+dashboard is at `http://my-rover.local:9120/` from your phone. `nervlynx logs` follows it;
+`nervlynx pull` brings recorded runs back to the laptop. Or run it by hand on the Pi with
+`nervlynx run` (add `--control` to drive from the dashboard).
+
+The same `robot.yaml` runs in both places: `hardware.backend: auto` uses real pins on the
+Pi and mock pins elsewhere, and nodes marked `only: sim` or `only: robot` (the simulated
+room, the real distance sensor) run only where they belong.
 
 ## Demo
 
@@ -13,9 +70,12 @@ It helps teams move from ad-hoc prototype scripts to production-style architectu
 
 ## Why NervLynx
 
-- **Live robot runtime**: run graphs continuously with fixed-rate control loops, a live dashboard with teleop, and a trace plus report for every session (`robot-core run-live`)
+- **Beginner-first CLI**: `nervlynx new / sim / validate / doctor / scan / deploy / run`, with a plain-English fix for every setup problem it finds
+- **Nodes are functions**: `@node` in `nodes/*.py`, no packaging; stale sensor data pauses the node so the drive deadman stops the robot
+- **Simulate before you solder**: a 2D world with obstacles, ultrasonic-style range sensors, collisions, and a live top-down view
+- **Live robot runtime**: run graphs continuously with fixed-rate control loops, a live dashboard with a touch joystick and camera streams, and a trace plus report for every session
 - **Safety by default**: drive deadman, latched e-stop, liveness watchdog, per-node circuit breakers, and a stall guard that stops actuators if the executor hangs
-- **Hardware ready**: RPi.GPIO / gpiozero backends, BTS7960 and TB6612 motor drivers, and a skid-steer drive node, all testable on a laptop with the mock backend and a simulated rover
+- **Hardware ready**: gpiozero/lgpio (works on the Pi 5), L298N, TB6612, and BTS7960 motor drivers, HC-SR04 and MPU6050 sensors, Pi and USB cameras, each with a mock twin for laptops and CI
 - **Structured runtime**: deterministic and async execution modes with priority scheduling
 - **Traceable dataflow**: envelope metadata (`topic`, `source`, `sequence`, `timestamp`, `schema`, `trace_id`)
 - **Operational safety**: watchdog liveness checks, backpressure detection, startup dependency supervision, checkpoint recovery
@@ -34,7 +94,7 @@ Primary modules:
 - `robot_core`: reusable runtime primitives and CLI, including the live executor (`live.py`), drive and hardware layers (`drive.py`, `hardware.py`), simulation nodes (`sim.py`), and the live HTTP surface (`server.py`)
 - `shuttle`: reference fixed-route stack built on the same patterns (`shuttle/README.md`)
 
-## Quick Start (10-Minute Path)
+## Developing NervLynx itself
 
 ```bash
 make demo

@@ -2,6 +2,25 @@
 
 This guide gives a fast "first successful run" for different personas.
 
+## Student, Hobbyist, or MVP Builder
+
+Use this path if you want a robot moving, first in simulation and then on a Raspberry Pi.
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install "git+https://github.com/vedantparnaik/nervlynx"
+nervlynx new my-rover
+cd my-rover
+nervlynx sim                     # http://127.0.0.1:9120/
+```
+
+What you get:
+- A project folder: `robot.yaml` (the robot), `nodes/avoid.py` (its behaviour), and a
+  `README.md` with the wiring.
+- A simulated room with obstacles, drawn live in the dashboard.
+- The same project runs on a Pi: `nervlynx doctor`, then `nervlynx deploy pi@<pi>.local
+  --service` from the laptop (see the main README).
+
 ## Robotics Engineer
 
 Use this path if you want to run and inspect pipeline behavior quickly.
