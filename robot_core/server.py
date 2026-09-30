@@ -214,6 +214,10 @@ def serve_live(
     def _camera(self, node_name: str, kind: str) -> None:
       buffer = getattr(runtime.nodes.get(node_name), "frame_buffer", None)
       if buffer is None:
+        from robot_core.camera import frames
+
+        buffer = frames(node_name)  # a camera on another device, shared by the mesh
+      if buffer is None:
         self._json({"error": f"no camera node named {node_name!r}"}, 404)
         return
       if kind == "/latest":
@@ -383,6 +387,15 @@ function brief(v) {
 }
 const cams = {};
 function showCameras(nodes) {
+  for (const v of Object.values(nodes)) {
+    for (const name of (v.status || {}).frames_in || []) {
+      if (cams[name]) continue;
+      const fig = document.createElement('figure');
+      fig.innerHTML = '<img alt="camera ' + esc(name) + '" src="/camera/' + encodeURIComponent(name) + '.mjpg"><figcaption class="dim">' +
+        esc(name) + ' \u00b7 from another device</figcaption>';
+      $('camgrid').appendChild(fig); cams[name] = fig; $('cameras').hidden = false;
+    }
+  }
   for (const [n, v] of Object.entries(nodes)) {
     const st = v.status || {};
     if (!st.camera) continue;

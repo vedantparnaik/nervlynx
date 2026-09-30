@@ -360,7 +360,7 @@ def build_live_runtime(
     bridge = MeshNode(
       runtime,
       plan=plan,
-      transport=mesh_transport if mesh_transport is not None else create_transport(mesh_cfg),
+      transport=mesh_transport if mesh_transport is not None else create_transport(mesh_cfg, robot=plan.robot),
       key=mesh_key(mesh_cfg),
       frame_fps=float(mesh_cfg.get("frame_fps", 10.0)),
       max_skew_s=float(mesh_cfg.get("max_skew_s", 30.0)),

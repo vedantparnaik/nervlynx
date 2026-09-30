@@ -356,9 +356,24 @@ def _target(host: str, project: Path, path: Optional[str], remote_nervlynx: str,
     raise typer.Exit(code=2)
 
 
+def _device_host(project: Path, device: str) -> str | None:
+  import yaml
+
+  try:
+    cfg = yaml.safe_load((project / "robot.yaml").read_text(encoding="utf-8")) or {}
+  except (OSError, yaml.YAMLError):
+    return None
+  devices = cfg.get("devices") if isinstance(cfg, dict) else None
+  if not isinstance(devices, dict) or device not in devices:
+    typer.echo(f"remote_error: robot.yaml has no device named {device!r}" + (f" (devices: {', '.join(devices)})" if isinstance(devices, dict) else ""))
+    raise typer.Exit(code=2)
+  host = (devices[device] or {}).get("host")
+  return str(host) if host else None
+
+
 @app.command("deploy")
 def deploy_cmd(
-  host: str = typer.Argument(..., help="The robot: user@host or an ssh config name, e.g. pi@my-rover.local."),
+  host: Optional[str] = typer.Argument(None, help="The robot: user@host or an ssh config name, e.g. pi@my-rover.local (default: the device's host)."),
   project: Path = typer.Option(Path("."), "--project", help="Project folder to copy (the one with robot.yaml)."),
   path: Optional[str] = typer.Option(None, "--path", help="Folder on the robot (default: ~/nervlynx-projects/<project name>)."),
   service: bool = typer.Option(False, "--service", help="Install a systemd user service that runs the project at boot, and start it."),
@@ -366,10 +381,19 @@ def deploy_cmd(
   run_args: str = typer.Option("", "--run-args", help="Extra `nervlynx run` options for the service, e.g. \"--control\"."),
   no_validate: bool = typer.Option(False, "--no-validate", help="Skip `nervlynx validate` on the robot."),
   remote_nervlynx: str = typer.Option("nervlynx", "--remote-nervlynx", help="nervlynx command on the robot, e.g. ~/.venv/bin/nervlynx."),
+  device: Optional[str] = typer.Option(None, "--device", help="Deploy to this device from robot.yaml's devices: (its host, and a service that runs its nodes)."),
 ) -> None:
   """Copy this project to the robot over SSH, check it there, and optionally run it as a service."""
+  import shlex
+
   from robot_core.remote import RemoteError, deploy
 
+  if device is not None:
+    host = host or _device_host(project, device)
+    run_args = f"--device {shlex.quote(device)}" + (f" {run_args}" if run_args else "")
+  if not host:
+    typer.echo("remote_error: give the robot as user@host" + (f", or set devices.{device}.host in robot.yaml" if device else ""))
+    raise typer.Exit(code=2)
   target = _target(host, project, path, remote_nervlynx, run_args)
   try:
     code = deploy(target, project, install_service=service, restart=restart, validate=not no_validate, echo=typer.echo)

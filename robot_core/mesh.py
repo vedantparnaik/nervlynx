@@ -375,7 +375,7 @@ class UdpTransport(MeshTransport):
       self._sock = None
 
 
-def create_transport(mesh: dict[str, Any]) -> MeshTransport:
+def create_transport(mesh: dict[str, Any], *, robot: str) -> MeshTransport:
   transport = mesh.get("transport", "udp")
   if transport == "udp":
     return UdpTransport(
@@ -387,7 +387,7 @@ def create_transport(mesh: dict[str, Any]) -> MeshTransport:
   if transport == "zenoh":
     from robot_core.mesh_zenoh import ZenohTransport
 
-    return ZenohTransport(connect=mesh.get("connect") or (), listen=mesh.get("listen") or ())
+    return ZenohTransport(robot=robot, connect=mesh.get("connect") or (), listen=mesh.get("listen") or ())
   raise MeshError(f"unknown mesh transport {transport!r}")
 
 
@@ -554,13 +554,17 @@ class MeshNode(LiveNode):
     engaged = self.runtime.estop_engaged
     self._send({"k": "hb", "estop": engaged, "reason": self.runtime.estop_reason if engaged else "", "nodes": sorted(self.runtime.nodes)})
 
-  def _send_frames(self, name: str) -> None:
-    from robot_core.camera import frames
+  def _local_frames(self, name: str) -> Any:
+    for node in self.runtime.nodes.values():
+      if getattr(node, "camera_name", None) == name and getattr(node, "active_source", None) not in (None, "none"):
+        return node.frame_buffer
+    return None
 
+  def _send_frames(self, name: str) -> None:
     seq, last = 0, 0.0
     gap = 1.0 / self.frame_fps
     while not self._stop.is_set():
-      buffer = frames(name)
+      buffer = self._local_frames(name)
       if buffer is None:
         self._stop.wait(0.5)
         continue

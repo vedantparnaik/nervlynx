@@ -13,9 +13,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "pyzmq>=26.0.0", "pycapnp>=2.0.0"]
+dev = ["pytest>=8.0.0", "pyzmq>=26.0.0", "pycapnp>=2.0.0", "eclipse-zenoh>=1.0"]
 zmq = ["pyzmq>=26.0.0"]
 shuttle = ["pyzmq>=26.0.0", "pycapnp>=2.0.0"]
+mesh = ["eclipse-zenoh>=1.0"]
 pi = [
   "RPi.GPIO>=0.7.1; platform_system == 'Linux'",
   "gpiozero>=2.0; platform_system == 'Linux'",
