@@ -1,7 +1,8 @@
 """Robot projects: a live config plus optional `nodes/*.py` files next to it.
 
 Any `@node` function or class in `<config dir>/nodes/*.py` becomes a plugin the config can
-use by name, with no packaging or entry points.
+use by name, with no packaging or entry points. `overlay.yaml` and `calibration.yaml`
+beside the config patch it for one robot (see `robot_core.overlay`).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import Any
 from robot_core.builtin_plugins import register_builtin_plugins
 from robot_core.live_config import load_live_config, register_live_builtins
 from robot_core.node_api import node_spec
+from robot_core.overlay import apply_overlays
 from robot_core.plugins import PluginRegistry
 from robot_core.reference_plugins import register_reference_plugins
 
@@ -82,7 +84,9 @@ def register_project_nodes(registry: PluginRegistry, config_path: str | Path) ->
 
 
 def load_project(config_path: str | Path) -> tuple[dict[str, Any], PluginRegistry, list[str]]:
-  """Config, a registry that includes the project's own nodes, and any node load problems."""
+  """Config with its overlays applied (see `robot_core.overlay`), a registry that includes
+  the project's own nodes, and any problems loading either."""
   registry = build_registry()
   problems = register_project_nodes(registry, config_path)
-  return load_live_config(config_path), registry, problems
+  cfg, overlay_problems = apply_overlays(load_live_config(config_path), config_path)
+  return cfg, registry, problems + overlay_problems

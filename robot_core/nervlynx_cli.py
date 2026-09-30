@@ -54,6 +54,7 @@ def new_project(
 def validate(config: Path = typer.Argument(DEFAULT_CONFIG, help="Robot config to check.")) -> None:
   """Check a robot config (and its nodes/*.py) for both simulation and the robot."""
   from robot_core.live_config import MODES, uses_modes, validate_live_config
+  from robot_core.overlay import overlay_paths
   from robot_core.project import load_project
 
   _require_config(config)
@@ -73,7 +74,9 @@ def validate(config: Path = typer.Argument(DEFAULT_CONFIG, help="Robot config to
     typer.echo(f"{len(issues)} problem{'s' if len(issues) != 1 else ''} found")
     raise typer.Exit(code=1)
   where = "sim and robot modes" if uses_modes(cfg) else "every mode"
-  typer.echo(f"{config}: ok in {where} ({len(cfg['nodes'])} nodes)")
+  overlays = overlay_paths(config)
+  with_overlays = f", with {' and '.join(path.name for path in overlays)}" if overlays else ""
+  typer.echo(f"{config}: ok in {where} ({len(cfg['nodes'])} nodes{with_overlays})")
 
 
 @app.command("sim")

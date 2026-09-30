@@ -17,6 +17,7 @@ import yaml
 
 from robot_core.live import LiveRuntimeError
 from robot_core.live_config import build_live_runtime, clock_for_config, validate_live_config
+from robot_core.overlay import overlay_paths
 from robot_core.project import load_project
 from robot_core.report import FaultLog, TraceRecorder, build_report, render_markdown
 from robot_core.server import serve_live
@@ -70,6 +71,11 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
   out_dir = opts.run_dir or Path("logs/live") / f"{runtime.name}-{time.strftime('%Y%m%d-%H%M%S')}"
   out_dir.mkdir(parents=True, exist_ok=True)
   shutil.copyfile(config, out_dir / "config.yaml")
+  overlays = overlay_paths(config)
+  for path in overlays:
+    shutil.copyfile(path, out_dir / path.name)
+  if overlays:
+    echo(f"overlays={','.join(path.name for path in overlays)}")
   fault_log = FaultLog(out_dir / "faults.jsonl")
   runtime.add_fault_listener(fault_log)
   recorder = None
@@ -123,6 +129,8 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
   wall_finished = time.time()
 
   artifacts = {"config": str(out_dir / "config.yaml"), "faults": str(out_dir / "faults.jsonl")}
+  for path in overlays:
+    artifacts[path.stem] = str(out_dir / path.name)
   if recorder is not None:
     artifacts["trace"] = str(recorder.path)
   artifacts.update({"report_json": str(out_dir / "report.json"), "report_md": str(out_dir / "report.md"), "metrics": str(out_dir / "metrics.prom")})

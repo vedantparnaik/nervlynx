@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 Runner = Callable[[Sequence[str]], int]
-RSYNC_EXCLUDES = ("logs/", "__pycache__/", "*.pyc", ".git/", ".venv/")
+# calibration.yaml and overlay.yaml belong to one robot: never sent, never deleted there.
+RSYNC_EXCLUDES = ("logs/", "__pycache__/", "*.pyc", ".git/", ".venv/", "/calibration.yaml", "/overlay.yaml")
 REMOTE_ROOT = "~/nervlynx-projects"
 
 
