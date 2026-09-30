@@ -25,6 +25,12 @@ nodes:
       right:
         - {name: right, in1: 20, in2: 21, en: 13}
 
+  # Pi camera or USB webcam, streamed to the dashboard. In the simulator it shows a test
+  # pattern; on a robot without a camera it logs a warning and everything else still runs.
+  - name: camera
+    plugin: camera
+    params: {name: front, width: 640, height: 480, fps: 15, optional: true}
+
   # The simulated robot, only in `nervlynx sim`.
   - name: sim
     plugin: skid_steer_sim

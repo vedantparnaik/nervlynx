@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 import yaml
 
+from robot_core.camera import CameraNode
 from robot_core.drive import SkidSteerDrive
 from robot_core.hardware import BACKENDS
 from robot_core.live import ESTOP_TOPIC, LiveNode, LiveRuntime, PluginNodeAdapter, SensorSourceNode
@@ -23,6 +24,7 @@ LIVE_BUILTINS: dict[str, Callable[..., LiveNode]] = {
   "skid_steer_sim": SkidSteerSim,
   "hcsr04_range": HCSR04Range,
   "mpu6050_imu": MPU6050Imu,
+  "camera": CameraNode,
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes"}
