@@ -116,6 +116,7 @@ nodes:
     input_topics: [cmd.drive]  # optional; defaults come from the plugin
     critical: true             # watched for liveness (see Safety)
     stale_after_s: 0.3         # per-node override of safety.stale_after_s
+    only: robot                # optional: run only in robot mode or only in sim mode
     params: {...}              # keyword arguments for live node plugins
   - name: camera
     plugin: camera_ingest_sensor
@@ -136,6 +137,21 @@ nodes:
 `robot-core live-validate` checks structure, plugin existence, pin conflicts, and node
 parameters by constructing every node; constructors never touch hardware, so validation
 is safe on any machine.
+
+### One config for simulation and the robot
+
+Mark nodes that only make sense in one place with `only: sim` or `only: robot`; unmarked
+nodes run in both. `run-live --mode robot` (the default) skips `only: sim` nodes; `--mode
+sim` skips `only: robot` nodes and forces every hardware node onto mock pins unless you
+pass `--backend`. `live-validate` checks each mode separately when a config uses `only:`.
+
+```yaml
+nodes:
+  - {plugin: avoid}                          # your code: runs in both
+  - {plugin: skid_steer_drive, params: ...}  # mock pins in sim, real pins on the robot
+  - {plugin: hcsr04_range, only: robot, params: {trigger: 23, echo: 24}}
+  - {plugin: skid_steer_sim, only: sim, params: {world: ..., range_sensors: [{name: front}]}}
+```
 
 ## Built-in live nodes
 
