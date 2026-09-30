@@ -9,8 +9,9 @@ envelopes, topics, and plugins, and adds the pieces you need when hardware is at
   simulated one, priority dispatch, per-step hop budget, deterministic trace IDs in sim.
 - **Safety layers**: drive deadman, latched e-stop, liveness watchdog, per-node circuit
   breaker, and an out-of-band stall guard that stops actuators if the executor hangs.
-- **Hardware**: RPi.GPIO / gpiozero / mock pin backends, BTS7960 and TB6612 motor
-  drivers, and a skid-steer drive node with stiction kick, slew limiting, and duty floors.
+- **Hardware**: gpiozero / RPi.GPIO / mock pin backends plus `auto` (real pins on a
+  Raspberry Pi, mock everywhere else), BTS7960 and TB6612 motor drivers, and a
+  skid-steer drive node with stiction kick, slew limiting, and duty floors.
 - **Observability**: live dashboard with teleop, Prometheus `/metrics`, JSON `/stats`,
   `robot-core top` for SSH sessions, and a run directory (trace, faults, report) for
   every session.
@@ -46,10 +47,15 @@ robot-core top http://127.0.0.1:9120
 1. Install NervLynx on the Pi and make a GPIO library available to its virtualenv:
 
    ```bash
-   sudo apt install python3-rpi.gpio          # or python3-gpiozero
-   python3 -m venv --system-site-packages .venv
-   .venv/bin/pip install -e .                 # or: pip install -e ".[pi]"
+   sudo apt install python3-gpiozero python3-lgpio   # works on every Pi, including the Pi 5
+   python3 -m venv --system-site-packages .venv      # lets the venv see the apt packages
+   .venv/bin/pip install -e .                        # or: pip install -e ".[pi]"
    ```
+
+   RPi.GPIO does not support the Pi 5 (its GPIO sits behind the RP1 chip), so prefer
+   gpiozero. With `hardware.backend: auto`, NervLynx picks gpiozero on a Pi, falls back to
+   RPi.GPIO only on boards where it works, and uses mock pins on any other machine, so the
+   same config runs in simulation on a laptop and on the robot.
 
 2. Copy one of the hardware packs and edit the pins to match your wiring:
 
@@ -99,7 +105,7 @@ safety:
   start_in_estop: false        # start latched; clear from the dashboard to move
 
 hardware:
-  backend: rpi_gpio            # default for nodes that take a backend; --backend overrides
+  backend: auto                # default for nodes that take a backend; --backend overrides
 
 nodes:
   - name: drive                # unique; defaults to the plugin name
@@ -139,7 +145,7 @@ Consumes drive commands, applies them to motors at `rate_hz`, and publishes `dri
 | --- | --- | --- |
 | `left`, `right` | required | Motor specs per side (any number of motors) |
 | `driver` | `bts7960` | `bts7960` (`rpwm`, `lpwm`, optional `enable_pins`) or `tb6612` (`in1`, `in2`, `pwm`, optional shared `stby`) |
-| `backend` | `mock` | `mock`, `rpi_gpio`, or `gpiozero` (or `hardware.backend` / `--backend`) |
+| `backend` | `mock` | `mock`, `rpi_gpio`, `gpiozero`, or `auto` (or `hardware.backend` / `--backend`); `auto` reports what it chose as an info fault and in `/stats` |
 | `pwm_frequency_hz` | 1000 | PWM carrier frequency |
 | `deadman_s` | 0.25 | Stop when no command has arrived for this long |
 | `max_speed` | 1.0 | Scales every command (a global speed limit) |
