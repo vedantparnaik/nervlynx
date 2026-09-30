@@ -236,6 +236,25 @@ simulator on `range.<name>` at 15 Hz by default.
 | `max_range_m` | 2.0 | Readings are capped here; `hit` is false at the cap |
 | `backend` | `mock` | `gpiozero` or `auto` on the robot; mock publishes `mock_distance_m` (default: nothing in range) |
 
+### `camera`
+
+Pi camera (picamera2, hardware-friendly JPEG encoder) or USB webcam (OpenCV), streamed to
+the dashboard at `/camera/<node>.mjpg` (latest frame: `/camera/<node>/latest`). Frames
+never travel through the message bus: they sit in a latest-frame buffer that other nodes
+read with `robot_core.camera.frames("<name>")`, and the node publishes only metadata on
+`camera.<name>` (`{"seq", "width", "height", "bytes", "fps", "format"}`).
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `name` | `front` | Buffer and topic name |
+| `width` / `height` / `fps` | 640 / 480 / 15 | Capture size and rate (also the node's tick rate) |
+| `source` | `auto` | `auto` (picamera2 if a Pi camera is attached, else OpenCV; mock off the Pi), `picamera2`, `opencv`, or `mock` |
+| `device` / `quality` | 0 / 80 | OpenCV device index and JPEG quality |
+| `optional` | false | When true, a missing camera is a warning and the rest of the robot keeps running |
+
+The mock source draws a moving colour-bar pattern (PNG, standard library only) inside the
+tick, so simulated-clock runs stay deterministic.
+
 ### `mpu6050_imu`
 
 MPU6050-family IMU (MPU6050, MPU6500, MPU9250 accel and gyro) over I2C with `smbus2`.
