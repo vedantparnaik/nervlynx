@@ -19,6 +19,8 @@ from robot_core.runtime import RuntimeMessage
 
 _EPS = 1e-12
 _LIDAR_KEYS = {"topic", "bins", "range_min_m", "range_max_m", "noise_m", "every_n_ticks"}
+_CAMERA_KEYS = {"name", "topic", "fov_deg", "range_m", "angle_deg", "height_m", "every_n_ticks", "labels", "width", "height"}
+_PERSONAL_SPACE_M = 0.15
 _CONTACT_RELEASE_M = 0.01
 _BEAM_RAYS = 9
 
@@ -90,26 +92,104 @@ def _ray_box(ox: float, oy: float, dx: float, dy: float, box: _Box) -> float | N
   return max(t_near, 0.0)
 
 
+_TARGET_KEYS = {"label", "at", "path", "speed_mps", "radius_m", "height_m", "loop"}
+
+
+@dataclass
+class SimTarget:
+  """Something that moves through the world along `path` (a person to follow, a pet)."""
+
+  label: str
+  path: list[tuple[float, float]]
+  speed_mps: float = 0.3
+  radius_m: float = 0.2
+  height_m: float = 1.7
+  loop: bool = True
+  travelled_m: float = 0.0
+
+  @classmethod
+  def parse(cls, raw: Any, idx: int) -> SimTarget:
+    where = f"world.targets[{idx}]"
+    if not isinstance(raw, dict):
+      raise ValueError(f"{where} must be a mapping like {{label: person, path: [[1, 1], [3, 1]]}}")
+    unknown = sorted(set(raw) - _TARGET_KEYS)
+    if unknown:
+      raise ValueError(f"{where}: unknown fields {', '.join(unknown)}")
+    label = raw.get("label", "person")
+    if not isinstance(label, str) or not label.strip():
+      raise ValueError(f"{where}.label must be a non-empty string")
+    if "path" in raw:
+      if not isinstance(raw["path"], list) or not raw["path"]:
+        raise ValueError(f"{where}.path must be a list of [x, y] points")
+      path = [tuple(_numbers(point, 2, f"{where}.path[{i}]")) for i, point in enumerate(raw["path"])]
+    elif "at" in raw:
+      path = [tuple(_numbers(raw["at"], 2, f"{where}.at"))]
+    else:
+      raise ValueError(f"{where} needs at: [x, y] or path: [[x, y], ...]")
+    speed = float(raw.get("speed_mps", 0.3))
+    radius = float(raw.get("radius_m", 0.2))
+    height = float(raw.get("height_m", 1.7 if label == "person" else 0.5))
+    if speed < 0 or radius <= 0 or height <= 0:
+      raise ValueError(f"{where}: speed_mps must be >= 0 and radius_m, height_m > 0")
+    return cls(label, path, speed, radius, height, bool(raw.get("loop", True)))  # type: ignore[arg-type]
+
+  def _legs(self) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    points = self.path + ([self.path[0]] if self.loop and len(self.path) > 2 else [])
+    legs = list(zip(points, points[1:]))
+    if not self.loop or len(self.path) == 2:
+      legs += [(b, a) for a, b in reversed(legs)]  # walk back the way it came
+    return legs
+
+  @property
+  def position(self) -> tuple[float, float]:
+    legs = self._legs()
+    total = sum(math.dist(a, b) for a, b in legs)
+    if not legs or total <= 0:
+      return self.path[0]
+    remaining = self.travelled_m % total
+    for a, b in legs:
+      length = math.dist(a, b)
+      if remaining <= length:
+        f = remaining / length if length else 0.0
+        return a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f
+      remaining -= length
+    return self.path[0]
+
+  def advance(self, dt: float) -> None:
+    self.travelled_m += self.speed_mps * dt
+
+
 class SimWorld:
   """Rectangular arena with walls at x in [0, width] and y in [0, height], plus obstacles.
 
   Obstacles are `{circle: [x, y, r]}` or `{box: [x_min, y_min, x_max, y_max]}`, in metres.
+  Targets (`{label: person, path: [[x, y], ...], speed_mps: 0.3}`) move along their path,
+  block the robot and its sensors, and are what simulated cameras detect.
   """
 
-  def __init__(self, width_m: float, height_m: float, obstacles: Iterable[_Circle | _Box] = ()) -> None:
+  def __init__(self, width_m: float, height_m: float, obstacles: Iterable[_Circle | _Box] = (), targets: Iterable[SimTarget] = ()) -> None:
     if width_m <= 0 or height_m <= 0:
       raise ValueError("world width_m and height_m must be > 0")
     self.width_m = float(width_m)
     self.height_m = float(height_m)
     self.obstacles = tuple(obstacles)
+    self.targets = list(targets)
+
+  def _target_circles(self, ignore: SimTarget | None = None) -> list[_Circle]:
+    return [_Circle(*t.position, t.radius_m) for t in self.targets if t is not ignore]
+
+  def advance(self, dt: float) -> None:
+    for target in self.targets:
+      target.advance(dt)
 
   @classmethod
   def from_dict(cls, raw: Any) -> SimWorld:
     if not isinstance(raw, dict):
       raise ValueError("world must be a mapping")
-    unknown = sorted(set(raw) - {"width_m", "height_m", "obstacles"})
+    unknown = sorted(set(raw) - {"width_m", "height_m", "obstacles", "targets"})
     if unknown:
       raise ValueError(f"unknown world fields: {', '.join(unknown)}")
+    targets = [SimTarget.parse(item, idx) for idx, item in enumerate(raw.get("targets") or [])]
     obstacles: list[_Circle | _Box] = []
     for idx, item in enumerate(raw.get("obstacles") or []):
       if not isinstance(item, dict) or len(item) != 1 or next(iter(item)) not in ("circle", "box"):
@@ -129,13 +209,13 @@ class SimWorld:
     height = raw.get("height_m", 3.0)
     if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (width, height)):
       raise ValueError("world width_m and height_m must be numbers")
-    return cls(width, height, obstacles)
+    return cls(width, height, obstacles, targets)
 
-  def ray(self, x: float, y: float, heading_rad: float, max_range_m: float) -> float:
-    """Distance from (x, y) along heading to the first wall or obstacle, capped at max_range_m."""
+  def ray(self, x: float, y: float, heading_rad: float, max_range_m: float, *, ignore: SimTarget | None = None) -> float:
+    """Distance from (x, y) along heading to the first wall, obstacle, or target, capped at max_range_m."""
     dx, dy = math.cos(heading_rad), math.sin(heading_rad)
     best = _ray_walls(x, y, dx, dy, self.width_m, self.height_m)
-    for obstacle in self.obstacles:
+    for obstacle in (*self.obstacles, *self._target_circles(ignore)):
       hit = _ray_circle(x, y, dx, dy, obstacle) if isinstance(obstacle, _Circle) else _ray_box(x, y, dx, dy, obstacle)
       if hit is not None and hit < best:
         best = hit
@@ -154,16 +234,25 @@ class SimWorld:
         cy = min(max(y, obstacle.y0), obstacle.y1)
         if math.hypot(x - cx, y - cy) < radius:
           return f"obstacle {idx}"
+    for target in self.targets:
+      tx, ty = target.position
+      if math.hypot(x - tx, y - ty) < target.radius_m + radius:
+        return f"the {target.label}"
     return None
 
   def to_dict(self) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
       "width_m": self.width_m,
       "height_m": self.height_m,
       "obstacles": [
         {"circle": [o.x, o.y, o.r]} if isinstance(o, _Circle) else {"box": [o.x0, o.y0, o.x1, o.y1]} for o in self.obstacles
       ],
     }
+    if self.targets:
+      out["targets"] = [
+        {"label": t.label, "x_m": round(t.position[0], 3), "y_m": round(t.position[1], 3), "radius_m": t.radius_m} for t in self.targets
+      ]
+    return out
 
 
 @dataclass(frozen=True)
@@ -288,7 +377,9 @@ class SkidSteerSim(LiveNode):
   heading_deg], default the arena centre facing +x), is stopped by walls and obstacles
   (each new contact counts as a collision), and `range_sensors` publish
   {"distance_m", "max_range_m", "hit"} on `range.<name>` every `range_every_n_ticks`.
-  `lidar` publishes 360-degree scans in the `lidar` node's format.
+  `lidar` publishes 360-degree scans in the `lidar` node's format, and `cameras` publish
+  what a camera would see of the world's targets in the `detector` node's format. Targets
+  wait rather than walk into the robot.
   """
 
   def __init__(
@@ -307,6 +398,7 @@ class SkidSteerSim(LiveNode):
     range_sensors: list[dict[str, Any]] | None = None,
     range_every_n_ticks: int = 2,
     lidar: dict[str, Any] | None = None,
+    cameras: list[dict[str, Any]] | None = None,
     seed: int = 0,
   ) -> None:
     if max_speed_mps <= 0 or track_width_m <= 0 or time_constant_s <= 0:
@@ -322,6 +414,10 @@ class SkidSteerSim(LiveNode):
     if len({s.name for s in self.sensors}) != len(self.sensors):
       raise ValueError("range_sensors names must be unique")
     self.lidar = self._parse_lidar(lidar)
+    self.cameras = [self._parse_camera(raw, idx) for idx, raw in enumerate(cameras or [])]
+    if len({c["name"] for c in self.cameras}) != len(self.cameras):
+      raise ValueError("cameras names must be unique")
+    self._frames = 0
     self.input_topics = (state_topic,)
     self.state_topic = state_topic
     self.odom_topic = odom_topic
@@ -383,6 +479,88 @@ class SkidSteerSim(LiveNode):
       raise ValueError("lidar: need bins 36..1440, 0 <= range_min_m < range_max_m, and noise_m >= 0")
     return spec
 
+  def _parse_camera(self, raw: Any, idx: int) -> dict[str, Any]:
+    where = f"cameras[{idx}]"
+    if not isinstance(raw, dict):
+      raise ValueError(f"{where} must be a mapping, e.g. {{name: front, fov_deg: 62}}")
+    if self.world is None:
+      raise ValueError("cameras need a world to see")
+    unknown = sorted(set(raw) - _CAMERA_KEYS)
+    if unknown:
+      raise ValueError(f"{where}: unknown fields {', '.join(unknown)}")
+    name = str(raw.get("name", "front"))
+    spec = {
+      "name": name,
+      "topic": str(raw.get("topic", f"detections.{name}")),
+      "labels": list(raw["labels"]) if raw.get("labels") else None,
+    }
+    try:
+      spec.update(
+        fov_deg=float(raw.get("fov_deg", 62.0)),
+        range_m=float(raw.get("range_m", 6.0)),
+        angle_deg=float(raw.get("angle_deg", 0.0)),
+        height_m=float(raw.get("height_m", 0.15)),
+        every_n_ticks=max(1, int(raw.get("every_n_ticks", 5))),
+        width=int(raw.get("width", 640)),
+        height=int(raw.get("height", 480)),
+      )
+    except (TypeError, ValueError):
+      raise ValueError(f"{where}: fov_deg, range_m, angle_deg, height_m, every_n_ticks, width, and height must be numbers") from None
+    if not 10.0 <= spec["fov_deg"] <= 170.0 or spec["range_m"] <= 0 or spec["width"] <= 0 or spec["height"] <= 0:
+      raise ValueError(f"{where}: fov_deg must be 10..170, and range_m, width, height > 0")
+    return spec
+
+  def _see(self, spec: dict[str, Any]) -> Output:
+    """Detections of the world's targets, as the `detector` node would publish them."""
+    from robot_core.detect import detection
+
+    assert self.world is not None
+    tan_h = math.tan(math.radians(spec["fov_deg"]) / 2)
+    tan_v = tan_h * spec["height"] / spec["width"]
+    heading = self.heading_rad + math.radians(spec["angle_deg"])
+    ox, oy = self.x_m + self.robot_radius_m * math.cos(heading), self.y_m + self.robot_radius_m * math.sin(heading)
+    found = []
+    for target in self.world.targets:
+      if spec["labels"] is not None and target.label not in spec["labels"]:
+        continue
+      tx, ty = target.position
+      distance = math.hypot(tx - ox, ty - oy)
+      if distance <= target.radius_m or distance > spec["range_m"]:
+        continue
+      direction = math.atan2(ty - oy, tx - ox)
+      bearing = (direction - heading + math.pi) % (2 * math.pi) - math.pi
+      if abs(bearing) >= math.atan(tan_h):
+        continue
+      if self.world.ray(ox, oy, direction, distance, ignore=target) < distance - target.radius_m:
+        continue  # something is in the way
+      depth = distance * math.cos(bearing)
+      u = 0.5 - math.tan(bearing) / (2 * tan_h)
+      half_w = target.radius_m / depth / (2 * tan_h)
+      top = 0.5 - (target.height_m - spec["height_m"]) / depth / (2 * tan_v)
+      bottom = 0.5 + spec["height_m"] / depth / (2 * tan_v)
+      confidence = max(0.3, 0.92 - 0.3 * distance / spec["range_m"] + self._rng.uniform(-0.02, 0.02))
+      found.append(detection(target.label, confidence, u - half_w, top, u + half_w, bottom))
+    found.sort(key=lambda d: -d["size"][1])
+    payload = {
+      "seq": self._frames,
+      "width": spec["width"],
+      "height": spec["height"],
+      "latency_ms": 0.0,
+      "backend": "sim",
+      "model": "sim",
+      "detections": found,
+    }
+    return (spec["topic"], "Detections", payload)
+
+  def _move_targets(self, dt: float) -> None:
+    assert self.world is not None
+    for target in self.world.targets:
+      before = target.travelled_m
+      target.advance(dt)
+      tx, ty = target.position
+      if math.hypot(tx - self.x_m, ty - self.y_m) < target.radius_m + self.robot_radius_m + _PERSONAL_SPACE_M:
+        target.travelled_m = before  # people wait for the robot instead of walking into it
+
   def _scan(self) -> Output:
     assert self.world is not None and self.lidar is not None
     spec = self.lidar
@@ -433,6 +611,8 @@ class SkidSteerSim(LiveNode):
     dt = 0.0 if self._last_ns is None else (now - self._last_ns) / 1e9
     self._last_ns = now
     self._ticks += 1
+    if dt > 0 and self.world is not None and self.world.targets:
+      self._move_targets(dt)
     if dt > 0:
       alpha = 1.0 - math.exp(-dt / self.time_constant_s)
       for idx in (0, 1):
@@ -488,6 +668,10 @@ class SkidSteerSim(LiveNode):
       out.extend(self._read_ranges())
     if self.lidar is not None and self._ticks % self.lidar["every_n_ticks"] == 0:
       out.append(self._scan())
+    for spec in self.cameras:
+      if self._ticks % spec["every_n_ticks"] == 0:
+        self._frames += 1
+        out.append(self._see(spec))
     if self._ticks % self.odom_every_n_ticks == 0:
       out.append((self.odom_topic, "Odometry", self.odometry()))
     return out or None
@@ -550,4 +734,6 @@ class SkidSteerSim(LiveNode):
       )
       if self.lidar is not None:
         status["lidar"] = {"topic": self.lidar["topic"], "range_max_m": self.lidar["range_max_m"]}
+      if self.cameras:
+        status["cameras"] = [{k: c[k] for k in ("name", "fov_deg", "angle_deg", "range_m")} for c in self.cameras]
     return status

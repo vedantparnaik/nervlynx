@@ -436,6 +436,20 @@ function drawWorld(nodes) {
     g.fillStyle = d < sn.max_range_m ? '#f8514944' : '#3fb95033';
     g.beginPath(); g.moveTo(X(ox), Y(oy)); g.arc(X(ox), Y(oy), d * k, -(a + half), -(a - half)); g.closePath(); g.fill();
   }
+  for (const cam of sim.cameras || []) {
+    const a = h + cam.angle_deg * Math.PI / 180, half = cam.fov_deg * Math.PI / 360;
+    g.strokeStyle = '#a371f777'; g.lineWidth = 1; g.beginPath();
+    for (const s of [-1, 1]) {
+      g.moveTo(X(sim.x_m), Y(sim.y_m));
+      g.lineTo(X(sim.x_m + cam.range_m * Math.cos(a + s * half)), Y(sim.y_m + cam.range_m * Math.sin(a + s * half)));
+    }
+    g.stroke();
+  }
+  g.font = '12px system-ui';
+  for (const t of w.targets || []) {
+    g.fillStyle = '#a371f7'; g.beginPath(); g.arc(X(t.x_m), Y(t.y_m), t.radius_m * k, 0, 2 * Math.PI); g.fill();
+    g.fillStyle = '#e6edf3'; g.fillText(t.label, X(t.x_m) + t.radius_m * k + 3, Y(t.y_m) + 4);
+  }
   if (lastScan && lastScan.pose && sim.lidar) {
     const p = lastScan.pose, ph = p.heading_deg * Math.PI / 180, inc = lastScan.angle_increment_deg * Math.PI / 180;
     g.fillStyle = '#d29922';
