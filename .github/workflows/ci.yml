@@ -97,6 +97,24 @@ jobs:
       - name: Live rover simulation
         run: robot-core run-live examples/live/rover_sim.yaml --sim-time --duration-s 10 --run-dir logs/live/minimal --strict --quiet
 
+  ros2-bridge:
+    runs-on: ubuntu-latest
+    container: ros:humble-ros-base
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install into a venv that can see ROS 2
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends python3-venv python3-pip
+          python3 -m venv --system-site-packages /opt/nlx
+          /opt/nlx/bin/pip install -U pip
+          /opt/nlx/bin/pip install . pytest
+      - name: Round trip through ROS 2 Humble
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          /opt/nlx/bin/python -m pytest -q tests/test_ros2_live.py tests/test_ros2_bridge.py -rs
+
   cpp-tests:
     runs-on: ubuntu-latest
     steps:
