@@ -34,7 +34,7 @@ jobs:
         with:
           image-name: nervlynx
           pi-gen-version: arm64
-          release: bookworm
+          release: trixie
           stage-list: stage0 stage1 stage2 ./deploy/pi/pi-gen/stage-nervlynx
           export-last-stage-only: true
           hostname: nervlynx
