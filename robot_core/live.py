@@ -1009,6 +1009,14 @@ class LiveRuntime(PipelineRuntime):
 
   # ------------------------------------------------------------------ introspection
 
+  def last_payload(self, topic: str) -> dict[str, Any] | None:
+    """A copy of the newest payload published on `topic` (safe from any thread)."""
+    with self._state_lock:
+      stats = self._topics.get(topic)
+      if stats is None or stats.last_payload is None:
+        return None
+      return json.loads(json.dumps(stats.last_payload, default=str))
+
   def health(self) -> dict[str, Any]:
     with self._state_lock:
       return self._health_locked()

@@ -9,6 +9,7 @@ GET  /faults     recent structured faults
 GET  /camera/<node>.mjpg     live stream of a camera node (multipart, one image per part)
 GET  /camera/<node>/latest   the newest frame of a camera node
 GET  /calibration            what each calibratable node can do, and the saved calibration
+GET  /topic/<topic>          the newest payload on a topic, in full (e.g. a LiDAR scan)
 POST /estop      latch the e-stop (always allowed)
 POST /estop/clear            requires control access
 POST /publish {topic, schema, payload}   requires control access and an allowed topic
@@ -35,6 +36,7 @@ from robot_core.live import LiveRuntime, LiveRuntimeError, supports_calibration
 _MAX_BODY_BYTES = 64 * 1024
 _CAMERA_PATH = re.compile(r"^/camera/([A-Za-z0-9_.-]+?)(\.mjpg|/latest)$")
 _CALIBRATION_PATH = re.compile(r"^/calibration/([^/]+)$")
+_TOPIC_PATH = re.compile(r"^/topic/([^/]+)$")
 _BOUNDARY = "nervlynxframe"
 
 
@@ -137,6 +139,13 @@ def serve_live(
         self._camera(*_CAMERA_PATH.match(path).groups())
       elif path == "/calibration":
         self._calibration_overview()
+      elif _TOPIC_PATH.match(path):
+        topic = unquote(_TOPIC_PATH.match(path).group(1))
+        payload = runtime.last_payload(topic)
+        if payload is None:
+          self._json({"error": f"nothing published on {topic!r} yet"}, 404)
+        else:
+          self._json(payload)
       else:
         self._json({"error": "not found"}, 404)
 
@@ -298,6 +307,7 @@ td.last{max-width:640px;overflow:hidden;text-overflow:ellipsis;font:12px ui-mono
 #knob{width:60px;height:60px;border-radius:50%;background:#1f6feb;position:absolute;left:50px;top:50px;pointer-events:none}
 #camgrid{display:flex;gap:12px;flex-wrap:wrap}#camgrid figure{margin:0}#camgrid img{max-width:100%;width:480px;border-radius:6px;background:#000;display:block}
 #worldc{width:100%;max-width:640px;background:#0b0f14;border-radius:6px;display:block}
+#lidarc{width:100%;max-width:360px;background:#0b0f14;border-radius:50%;display:block}
 h3{font-size:13px;margin:14px 0 6px}.warn{color:var(--warn)}.calnode+.calnode{border-top:1px solid var(--line);margin-top:10px}
 #calibbody p{margin:6px 0;line-height:2.4}#calibbody input[type=range]{width:220px;max-width:100%;vertical-align:middle}
 </style></head><body>
@@ -311,6 +321,7 @@ h3{font-size:13px;margin:14px 0 6px}.warn{color:var(--warn)}.calnode+.calnode{bo
 <label>Speed <input id="speed" type="range" min="0.1" max="1" step="0.05" value="0.5"> <span id="speedv">0.50</span></label>
 <p class="dim">Commands stream at 10 Hz while you hold; let go and the drive deadman stops the motors.</p></section>
 <section id="world" hidden><h2>Simulation</h2><canvas id="worldc" width="640" height="480"></canvas><p id="worldinfo" class="dim"></p></section>
+<section id="lidar" hidden><h2>LiDAR</h2><canvas id="lidarc" width="360" height="360"></canvas><p id="lidarinfo" class="dim"></p></section>
 <section id="cameras" class="wide" hidden><h2>Cameras</h2><div id="camgrid"></div></section>
 <section id="calib" class="wide" hidden><h2>Calibrate</h2>
 <p class="dim">Changes apply immediately. Save writes calibration.yaml beside robot.yaml so they apply every time this robot starts.</p>
@@ -354,6 +365,7 @@ async function refresh() {
       '</td><td class="last" title="' + esc(v.last_error || '') + '">' + esc(brief(v)) + '</td></tr>'));
   showCameras(s.nodes);
   drawWorld(s.nodes);
+  drawScan(s.nodes);
   table($('topics'), ['topic', 'count', 'Hz', 'latency p50 ms', 'p95 ms', 'last'],
     Object.entries(s.topics).map(([t, v]) => '<tr><td>' + esc(t) + '</td><td class="n">' + v.count + '</td><td class="n">' + num(v.rate_hz, 1) +
       '</td><td class="n">' + num(v.latency_ms.p50, 3) + '</td><td class="n">' + num(v.latency_ms.p95, 3) +
@@ -411,12 +423,39 @@ function drawWorld(nodes) {
     g.fillStyle = d < sn.max_range_m ? '#f8514944' : '#3fb95033';
     g.beginPath(); g.moveTo(X(ox), Y(oy)); g.arc(X(ox), Y(oy), d * k, -(a + half), -(a - half)); g.closePath(); g.fill();
   }
+  if (lastScan && lastScan.pose && sim.lidar) {
+    const p = lastScan.pose, ph = p.heading_deg * Math.PI / 180, inc = lastScan.angle_increment_deg * Math.PI / 180;
+    g.fillStyle = '#d29922';
+    lastScan.ranges_m.forEach((d, i) => {
+      if (d === null) return;
+      g.fillRect(X(p.x_m + d * Math.cos(ph + i * inc)) - 1.5, Y(p.y_m + d * Math.sin(ph + i * inc)) - 1.5, 3, 3);
+    });
+  }
   g.fillStyle = sim.bumped ? '#f85149' : '#3fb950';
   g.beginPath(); g.arc(X(sim.x_m), Y(sim.y_m), r * k, 0, 2 * Math.PI); g.fill();
   g.strokeStyle = '#0e1116'; g.lineWidth = 3; g.beginPath(); g.moveTo(X(sim.x_m), Y(sim.y_m));
   g.lineTo(X(sim.x_m + r * Math.cos(h)), Y(sim.y_m + r * Math.sin(h))); g.stroke();
   $('worldinfo').textContent = 'collisions ' + sim.collisions + (sim.bumped ? ' (touching ' + sim.bumped + ')' : '') +
     ' \u00b7 driven ' + num(sim.distance_m, 2) + ' m \u00b7 speed ' + num(sim.speed_mps, 2) + ' m/s';
+}
+let lastScan = null;
+async function drawScan(nodes) {
+  const topics = Object.values(nodes).map(v => v.status || {}).map(st => st.scan_topic || (st.lidar && st.lidar.topic)).filter(Boolean);
+  if (!topics.length) return;
+  try { const r = await fetch('/topic/' + encodeURIComponent(topics[0]), {cache: 'no-store'}); if (!r.ok) return; lastScan = await r.json(); }
+  catch (e) { return; }
+  const scan = lastScan, c = $('lidarc'), g = c.getContext('2d'), R = c.width / 2, k = R / scan.range_max_m;
+  $('lidar').hidden = false;
+  g.clearRect(0, 0, c.width, c.height);
+  g.strokeStyle = '#2a313c'; g.lineWidth = 1;
+  for (let m = 1; m < scan.range_max_m; m++) { g.beginPath(); g.arc(R, R, m * k, 0, 2 * Math.PI); g.stroke(); }
+  g.fillStyle = '#d29922';
+  const inc = scan.angle_increment_deg * Math.PI / 180;
+  scan.ranges_m.forEach((d, i) => { if (d !== null) g.fillRect(R - d * k * Math.sin(i * inc) - 1.5, R - d * k * Math.cos(i * inc) - 1.5, 3, 3); });
+  g.fillStyle = '#3fb950'; g.beginPath(); g.moveTo(R, R - 9); g.lineTo(R - 6, R + 6); g.lineTo(R + 6, R + 6); g.closePath(); g.fill();
+  const near = scan.nearest;
+  $('lidarinfo').textContent = scan.model + ' \\u00b7 ' + scan.points + ' points \\u00b7 ' + num(scan.scan_hz, 1) + ' Hz \\u00b7 rings every 1 m' +
+    (near ? ' \\u00b7 nearest ' + num(near.distance_m, 2) + ' m at ' + num(near.angle_deg, 0) + '\\u00b0' : ' \\u00b7 nothing in range');
 }
 setInterval(refresh, 500); refresh();
 if (CFG.allow_control && CFG.drive_topic) {

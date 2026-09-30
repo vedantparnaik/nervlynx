@@ -13,10 +13,12 @@ import random
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from robot_core.lidar import ray_scan, scan_payload
 from robot_core.live import LiveNode, NodeContext, Output
 from robot_core.runtime import RuntimeMessage
 
 _EPS = 1e-12
+_LIDAR_KEYS = {"topic", "bins", "range_min_m", "range_max_m", "noise_m", "every_n_ticks"}
 _CONTACT_RELEASE_M = 0.01
 _BEAM_RAYS = 9
 
@@ -286,6 +288,7 @@ class SkidSteerSim(LiveNode):
   heading_deg], default the arena centre facing +x), is stopped by walls and obstacles
   (each new contact counts as a collision), and `range_sensors` publish
   {"distance_m", "max_range_m", "hit"} on `range.<name>` every `range_every_n_ticks`.
+  `lidar` publishes 360-degree scans in the `lidar` node's format.
   """
 
   def __init__(
@@ -303,6 +306,7 @@ class SkidSteerSim(LiveNode):
     start: list[float] | None = None,
     range_sensors: list[dict[str, Any]] | None = None,
     range_every_n_ticks: int = 2,
+    lidar: dict[str, Any] | None = None,
     seed: int = 0,
   ) -> None:
     if max_speed_mps <= 0 or track_width_m <= 0 or time_constant_s <= 0:
@@ -317,6 +321,7 @@ class SkidSteerSim(LiveNode):
       raise ValueError("range_sensors need a world to see")
     if len({s.name for s in self.sensors}) != len(self.sensors):
       raise ValueError("range_sensors names must be unique")
+    self.lidar = self._parse_lidar(lidar)
     self.input_topics = (state_topic,)
     self.state_topic = state_topic
     self.odom_topic = odom_topic
@@ -350,9 +355,58 @@ class SkidSteerSim(LiveNode):
     self._collisions: Any = None
     self._last_ns: int | None = None
     self._ticks = 0
+    self._period_ns = 0
     self._gauges: dict[str, Any] = {}
 
+  def _parse_lidar(self, raw: Any) -> dict[str, Any] | None:
+    if raw is None:
+      return None
+    if not isinstance(raw, dict):
+      raise ValueError("lidar must be a mapping, e.g. {range_max_m: 8.0}")
+    if self.world is None:
+      raise ValueError("lidar needs a world to see")
+    unknown = sorted(set(raw) - _LIDAR_KEYS)
+    if unknown:
+      raise ValueError(f"lidar: unknown fields {', '.join(unknown)}")
+    spec = {"topic": "scan", "bins": 360, "range_min_m": 0.05, "range_max_m": 8.0, "noise_m": 0.0, "every_n_ticks": 5, **raw}
+    try:
+      spec.update(
+        bins=int(spec["bins"]),
+        every_n_ticks=max(1, int(spec["every_n_ticks"])),
+        range_min_m=float(spec["range_min_m"]),
+        range_max_m=float(spec["range_max_m"]),
+        noise_m=float(spec["noise_m"]),
+      )
+    except (TypeError, ValueError):
+      raise ValueError("lidar: bins, every_n_ticks, range_min_m, range_max_m, and noise_m must be numbers") from None
+    if not 36 <= spec["bins"] <= 1440 or not 0 <= spec["range_min_m"] < spec["range_max_m"] or spec["noise_m"] < 0:
+      raise ValueError("lidar: need bins 36..1440, 0 <= range_min_m < range_max_m, and noise_m >= 0")
+    return spec
+
+  def _scan(self) -> Output:
+    assert self.world is not None and self.lidar is not None
+    spec = self.lidar
+    ranges = ray_scan(self.world, self.x_m, self.y_m, self.heading_rad, bins=spec["bins"], range_max_m=spec["range_max_m"])
+    points = 0
+    for i, distance in enumerate(ranges):
+      if distance is None:
+        continue
+      if spec["noise_m"]:
+        distance += self._rng.gauss(0.0, spec["noise_m"])
+      if spec["range_min_m"] <= distance <= spec["range_max_m"]:
+        ranges[i] = round(distance, 3)
+        points += 1
+      else:
+        ranges[i] = None
+    rate = 1e9 / (self._period_ns * spec["every_n_ticks"]) if self._period_ns else 0.0
+    payload = scan_payload(ranges, range_min_m=spec["range_min_m"], range_max_m=spec["range_max_m"], points=points, scan_hz=rate, model="sim")
+    # Where the scan was taken from, so a viewer can draw it on the map without lag.
+    payload["pose"] = {"x_m": round(self.x_m, 4), "y_m": round(self.y_m, 4), "heading_deg": round(math.degrees(self.heading_rad), 3)}
+    return (spec["topic"], "LaserScan", payload)
+
   def setup(self, ctx: NodeContext) -> None:
+    rate = getattr(ctx, "rate_hz", None)
+    self._period_ns = int(1e9 / rate) if rate else 0
     for name in ("speed_mps", "yaw_rate_dps", "heading_deg", "distance_m"):
       self._gauges[name] = ctx.metrics.gauge(f"nervlynx_sim_{name}")
     if self.world is not None:
@@ -432,6 +486,8 @@ class SkidSteerSim(LiveNode):
     out: list[Output] = []
     if self.sensors and self._ticks % self.range_every_n_ticks == 0:
       out.extend(self._read_ranges())
+    if self.lidar is not None and self._ticks % self.lidar["every_n_ticks"] == 0:
+      out.append(self._scan())
     if self._ticks % self.odom_every_n_ticks == 0:
       out.append((self.odom_topic, "Odometry", self.odometry()))
     return out or None
@@ -492,4 +548,6 @@ class SkidSteerSim(LiveNode):
           "world": self.world.to_dict(),
         }
       )
+      if self.lidar is not None:
+        status["lidar"] = {"topic": self.lidar["topic"], "range_max_m": self.lidar["range_max_m"]}
     return status

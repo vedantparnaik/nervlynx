@@ -248,8 +248,15 @@ against before the robot exists:
       - {name: front, angle_deg: 0, max_range_m: 2.0, noise_m: 0.01}
       - {name: left, angle_deg: 45, max_range_m: 1.0}
     range_every_n_ticks: 2                 # 25 Hz at rate_hz 50
+    lidar: {range_max_m: 8.0, noise_m: 0.01}   # 360-degree scans on `scan`, like the lidar node
     seed: 0                                # sensor noise is repeatable per seed
 ```
+
+`lidar` takes `topic` (`scan`), `bins` (360), `range_min_m` / `range_max_m` (0.05 / 8.0),
+`noise_m`, and `every_n_ticks` (5, so 10 Hz at `rate_hz` 50); simulated scans also carry
+the `pose` they were taken from. The dashboard draws the scan in the world view and in a
+LiDAR panel; the panel also shows a real `lidar` node's scans, and `GET /topic/scan`
+returns the newest one in full.
 
 Range readings are `{"distance_m", "max_range_m", "hit"}`, measured from the robot's edge
 and capped at `max_range_m` (`hit` is false when nothing is in range). Walls and obstacles
