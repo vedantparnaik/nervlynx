@@ -27,6 +27,7 @@ timed from `speed_mps` and `turn_dps`, so calibrate those to your robot.
 from __future__ import annotations
 
 import inspect
+import itertools
 import math
 import sys
 import typing
@@ -41,6 +42,12 @@ PLAN_TOPIC = "agent.plan"
 STATUS_TOPIC = "agent.status"
 SAY_TOPIC = "agent.say"
 _TYPES = {int: "integer", float: "number", str: "string", bool: "boolean"}
+_SPEECH_IDS = itertools.count(1)
+
+
+def speech(text: str) -> dict[str, Any]:
+  """An agent.say payload; `id` tells listeners (the dashboard, a speaker) it is new."""
+  return {"text": str(text), "id": next(_SPEECH_IDS)}
 
 
 @dataclass(frozen=True)
@@ -233,7 +240,7 @@ class SkillContext:
     self.outputs.append((topic, schema, dict(payload)))
 
   def say(self, text: str) -> None:
-    self.outputs.append((SAY_TOPIC, "Speech", {"text": str(text)}))
+    self.outputs.append((SAY_TOPIC, "Speech", speech(text)))
 
   def wait(self, seconds: float) -> Generator[None, None, None]:
     end = self.now_s + max(0.0, float(seconds))

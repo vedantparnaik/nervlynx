@@ -29,6 +29,7 @@ LIVE_BUILTINS: dict[str, str] = {
   "detector": "robot_core.detect:Detector",
   "ros2_bridge": "robot_core.ros2_bridge:Ros2Bridge",
   "skills": "robot_core.skills:SkillRunner",
+  "agent": "robot_core.agent:Agent",
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes", "devices", "mesh"}
