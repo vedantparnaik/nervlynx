@@ -27,7 +27,7 @@
 - [ ] Add richer type validation (nested arrays/maps).
 
 ### M3 - Operations and Reliability
-- [ ] Add circuit breaker strategy for unstable nodes.
+- [x] Add circuit breaker strategy for unstable nodes (`LiveRuntime`, `runtime.breaker`).
 - [ ] Add checkpoint snapshots with version stamps.
 - [ ] Add chaos scenarios for node crash/restart loops.
 
@@ -35,6 +35,16 @@
 - [x] Publish getting-started tutorial with one robot pack (`docs/GETTING_STARTED.md`, `make demo`).
 - [x] Add benchmark trend reporting in CI (baseline + artifacts).
 - [x] Add package release workflow and changelog automation (`docs/RELEASE_PROCESS.md`, `.github/workflows/release.yml`).
+
+### M5 - Live Runtime and Hardware
+- [x] Continuous executor with fixed-rate ticks, simulated clock, and per-session run reports (`robot-core run-live`).
+- [x] Layered actuator safety: deadman, latched e-stop, watchdog, circuit breaker, stall guard.
+- [x] GPIO backends and BTS7960/TB6612 skid-steer drive with a simulated plant.
+- [x] Live dashboard, teleop, Prometheus metrics, and `robot-core top`.
+- [ ] Wheel encoder / IMU sensor nodes and closed-loop speed control.
+- [ ] Camera source node (V4L2/MJPEG) with frame-rate and latency metrics.
+- [ ] Bridge live graphs across processes over `ZmqJsonTransport`.
+- [ ] Live executor parity in the C++ runtime.
 
 ## Good first issues
 

@@ -1,3 +1,5 @@
+import re
+
 from typer.testing import CliRunner
 
 from robot_core.cli import app
@@ -37,7 +39,9 @@ def test_graph_validate_command_requires_at_least_one_path() -> None:
   runner = CliRunner()
   result = runner.invoke(app, ["graph-validate"])
   assert result.exit_code == 2
-  assert "Missing argument 'CONFIGS...'" in result.stderr
+  # Typer's wording and styling vary across releases; match the substance only.
+  message = re.sub(r"\x1b\[[0-9;]*m", "", result.stderr or result.output).lower()
+  assert "missing argument" in message and "configs" in message
 
 
 def test_graph_validate_command_accepts_multiple_valid_configs() -> None:

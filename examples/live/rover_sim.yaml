@@ -1,0 +1,46 @@
+name: rover_sim
+description: >
+  Closed-loop skid-steer rover that needs no hardware. A scripted driver publishes
+  commands, the drive node shapes them onto mock BTS7960 motors, and a kinematic model
+  turns the applied duty into odometry.
+  Run: robot-core run-live examples/live/rover_sim.yaml --duration-s 30
+  Fast and deterministic: robot-core run-live examples/live/rover_sim.yaml --sim-time --duration-s 60
+
+safety:
+  stale_after_s: 0.5
+
+hardware:
+  backend: mock
+
+nodes:
+  - name: pattern
+    plugin: scripted_drive
+    rate_hz: 20
+    params:
+      loop: true
+      steps:
+        - {linear: 0.6, angular: 0.0, duration_s: 2.0}
+        - {left: -0.6, right: 0.6, duration_s: 0.8}
+        - {linear: 0.6, angular: 0.0, duration_s: 2.0}
+        - {left: 0.0, right: 0.0, duration_s: 1.0}
+
+  - name: drive
+    plugin: skid_steer_drive
+    rate_hz: 50
+    critical: true
+    params:
+      driver: bts7960
+      deadman_s: 0.25
+      left:
+        - {name: FL, rpwm: 12, lpwm: 13}
+        - {name: RL, rpwm: 5, lpwm: 6}
+      right:
+        - {name: FR, rpwm: 18, lpwm: 19, invert: true}
+        - {name: RR, rpwm: 16, lpwm: 20, invert: true}
+
+  - name: plant
+    plugin: skid_steer_sim
+    rate_hz: 50
+    params:
+      max_speed_mps: 0.6
+      track_width_m: 0.25

@@ -4,6 +4,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
 import heapq
+import threading
 from typing import Any, Awaitable, Callable
 import time
 import uuid
@@ -30,16 +31,51 @@ AsyncNodeHandler = Callable[[RuntimeMessage], Awaitable[list[tuple[str, str, dic
 
 
 class Clock:
+  simulated = False
+
   def monotonic_ns(self) -> int:
+    raise NotImplementedError
+
+  def sleep_until_ns(self, target_ns: int, wake: threading.Event | None = None) -> None:
+    """Block until `target_ns`, returning early if `wake` is set."""
     raise NotImplementedError
 
 
 class SystemClock(Clock):
+  # OS sleeps overshoot (a few ms on macOS, ~0.1 ms on Linux). Sleep short by the learned
+  # overshoot plus this margin, then yield through the remainder, so deadlines land on time
+  # without busy-waiting through the whole period.
+  _MARGIN_NS = 200_000
+  _MAX_LEAD_NS = 10_000_000
+
+  def __init__(self) -> None:
+    self._oversleep_ns = 0.0
+
   def monotonic_ns(self) -> int:
     return time.monotonic_ns()
 
+  def sleep_until_ns(self, target_ns: int, wake: threading.Event | None = None) -> None:
+    now = time.monotonic_ns()
+    lead = min(int(self._oversleep_ns) + self._MARGIN_NS, self._MAX_LEAD_NS)
+    coarse_ns = target_ns - now - lead
+    if coarse_ns > 0:
+      if wake is None:
+        time.sleep(coarse_ns / 1e9)
+      elif wake.wait(coarse_ns / 1e9):
+        return
+      sample = max(0, time.monotonic_ns() - (now + coarse_ns))
+      # Rise fast and decay slowly so the lead tracks the upper envelope of the overshoot.
+      alpha = 0.5 if sample > self._oversleep_ns else 0.05
+      self._oversleep_ns += alpha * (sample - self._oversleep_ns)
+    while time.monotonic_ns() < target_ns:
+      if wake is not None and wake.is_set():
+        return
+      time.sleep(0)
+
 
 class SimulatedClock(Clock):
+  simulated = True
+
   def __init__(self, start_ns: int = 0) -> None:
     self._now_ns = start_ns
 
@@ -48,6 +84,10 @@ class SimulatedClock(Clock):
 
   def advance_ms(self, dt_ms: float) -> None:
     self._now_ns += int(dt_ms * 1e6)
+
+  def sleep_until_ns(self, target_ns: int, wake: threading.Event | None = None) -> None:
+    if target_ns > self._now_ns:
+      self._now_ns = target_ns
 
 
 class PipelineRuntime:
@@ -146,6 +186,11 @@ class PipelineRuntime:
   @property
   def faults(self) -> list[str]:
     return list(self._faults)
+
+  @property
+  def subscriptions(self) -> dict[str, list[str]]:
+    """Topic -> names of the nodes subscribed to it."""
+    return {topic: [name for name, _ in handlers] for topic, handlers in self._subscriptions.items()}
 
 
 class AsyncPipelineRuntime(PipelineRuntime):

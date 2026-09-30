@@ -24,8 +24,15 @@ make replay-check  # deterministic replay fixture (matches CI)
 make demo     # install, run-example, replay
 make compile  # quick syntax check without pytest
 make graph-example  # run-graph on examples/robot_packs/surveillance.yaml
+make live-validate  # validate every graph in examples/live (no hardware touched)
+make live-sim       # rover_sim on a simulated clock (LIVE_GRAPH=..., LIVE_DURATION=...)
+make live-demo      # rover_sim in real time with the dashboard on :9120
+make bench-live     # live dispatch cost and tick precision on this machine
 robot-core version
 ```
+
+Live-runtime tests run entirely on the mock backend and a simulated clock, so they need
+no Raspberry Pi. See `docs/LIVE_RUNTIME.md` for the architecture and safety model.
 
 ## C++ reference runtime
 

@@ -1,0 +1,22 @@
+[Unit]
+Description=NervLynx live rover graph
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nervlynx
+# Required for teleop over the network; change it and share it only with operators.
+Environment=NERVLYNX_CONTROL_TOKEN=change-me
+ExecStart=/opt/nervlynx/.venv/bin/robot-core run-live examples/live/rover_bts7960.yaml --host 0.0.0.0 --allow-control --quiet
+# SIGINT lets the runtime stop the motors and write its run report before exiting.
+KillSignal=SIGINT
+TimeoutStopSec=10
+Restart=on-failure
+RestartSec=2
+User=nervlynx
+Group=nervlynx
+SupplementaryGroups=gpio
+
+[Install]
+WantedBy=multi-user.target

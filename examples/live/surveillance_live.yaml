@@ -1,0 +1,22 @@
+name: surveillance_live
+description: >
+  The one-shot surveillance plugins running continuously: the camera sensor is sampled at
+  10 Hz and every reading flows through perception, planning, and the mock actuator.
+  Perception is critical, so if the sensor stops the watchdog latches the e-stop.
+
+safety:
+  stale_after_s: 1.0
+
+nodes:
+  - name: camera
+    plugin: camera_ingest_sensor
+    rate_hz: 10
+    topic: sensors.bundle
+    schema: SensorBundle
+  - name: perception
+    plugin: perception_node
+    critical: true
+  - name: planner
+    plugin: planner_stub_node
+  - name: actuator
+    plugin: actuator_mock_node

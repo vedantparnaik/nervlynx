@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Live runtime** (`robot_core/live.py`): `LiveRuntime` runs graphs continuously with fixed-rate node ticks on the system clock or a simulated clock (fast-forward, deterministic trace IDs), priority dispatch with a per-step hop budget, per-node exception isolation and circuit breakers, liveness watchdog for `critical` nodes, a latched e-stop, and a stall-guard thread that hard-stops actuators when the executor stops stepping. `LiveNode` hooks: `setup`, `on_message`, `tick`, `safe_stop`, `hard_stop`, `teardown`, `status`.
+- Live instrumentation: per-topic publish/deliver/drop counters, handler and tick duration histograms, tick lateness (jitter) and overruns, root-to-topic trace latency (e.g. command-to-actuation), watchdog/e-stop/stall/fault counters, and topic rate gauges.
+- **Hardware layer** (`robot_core/hardware.py`): `mock`, `rpi_gpio`, and `gpiozero` pin backends; `BTS7960Motor` and `TB6612Motor` drivers; pin-conflict validation before any hardware is touched. Optional `pi` extra installs RPi.GPIO and gpiozero.
+- **Skid-steer drive node** (`robot_core/drive.py`): deadman, e-stop handling, duty floors, stiction kick, slew limiting, and coast-through-zero reversals; accepts `{left,right}` or `{linear,angular}` commands; publishes `drive.state` and per-motor duty metrics.
+- **Simulation nodes** (`robot_core/sim.py`): `ScriptedDriveSource` and a first-order `SkidSteerSim` plant producing odometry, so the full command-to-motion loop runs on a laptop or in CI.
+- Live graph YAML (`robot_core/live_config.py`) with validation that instantiates nodes without touching hardware; one-shot node plugins and sensor plugins run live unchanged. New `nervlynx.live_nodes` entry-point group.
+- **Live HTTP surface** (`robot_core/server.py`): dashboard with teleop pad and e-stop, `/metrics`, `/health`, `/stats`, `/graph`, `/faults`, `POST /estop`, and `POST /estop/clear` / `POST /publish` gated by `--allow-control`, an optional token, and a topic allowlist.
+- CLI: `robot-core run-live` (dashboard, signal-safe shutdown, run directory with `trace.jsonl`, `faults.jsonl`, `report.json`, `report.md`, `metrics.prom`; `--sim-time`, `--backend`, `--strict`, `--record-exclude`), `robot-core live-validate`, and `robot-core top` (terminal dashboard).
+- Live packs in `examples/live/`: `rover_sim`, `rover_bts7960`, `rover_tb6612`, `surveillance_live`; `deploy/systemd/nervlynx-rover.service`.
+- `benchmarks/benchmark_live.py`: live dispatch cost and tick-lateness/CPU characterisation; CI runs it plus `live-validate` and a strict 30 s rover simulation and uploads the report.
+- `robot-core chaos-pass --trials N --seed S` measures drop/mutate rates over many deterministic trials.
+- `robot-core inspect-trace --limit N` for large (live) traces.
+- `docs/LIVE_RUNTIME.md` guide; Makefile targets `live-validate`, `live-demo`, `live-sim`, `bench-live`.
 - Release automation: tag-triggered GitHub Release workflow with wheel and sdist artifacts.
 - Governance docs: release process, community labels and quarterly themes, deprecation policy.
 - Security: `SECURITY.md`, baseline `docs/THREAT_MODEL.md`, CycloneDX SBOM CI workflow and artifacts.
@@ -55,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `MetricsRegistry` is thread-safe and supports labels, histograms (Prometheus buckets plus reservoir quantiles), `# HELP` text, and JSON snapshots; unlabelled series render exactly as before. `serve_metrics` uses a threading server.
+- `SystemClock.sleep_until_ns` compensates for OS sleep overshoot (learned per clock), cutting median tick lateness from milliseconds to microseconds on macOS; `Clock` gains `sleep_until_ns` and `simulated`.
+- `PipelineRuntime.subscriptions` exposes topic subscribers; the dashboard no longer reads private runtime state.
 - `ROADMAP.md` M4 developer-experience milestones marked complete where shipped.
 - `CONTRIBUTING.md` local checks use `make test` and `robot-core` entry points; `docs/GETTING_STARTED.md` cross-links related docs.
 - `README.md` shows a main-branch CI status badge and links `docs/DEVELOPMENT.md`; Common Commands lists `robot-core version` and the robot packs README.
@@ -82,6 +98,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `make preflight` and docs now include core graph existence verification in the local gate.
 - Docs now include JSON verify usage for machine-readable graph existence checks.
 - Development/contributing and robot-pack docs include `graph-doctor` health-check usage.
+
+### Fixed
+
+- Chaos fault injection is now deterministic across processes. It seeded its RNG with the builtin `hash()` of payload keys, which Python randomises per process, so `chaos-pass` could report different results for the same settings (for example 0 vs 3 messages at 0.2/0.2).
+- CLI tests work with Typer 0.27+, whose `CliRunner` no longer depends on Click (restores green CI on 3.10–3.12).
 
 ## [0.2.0] - 2026-04-15
 

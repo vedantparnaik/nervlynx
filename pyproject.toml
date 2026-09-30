@@ -16,6 +16,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
+pi = [
+  "RPi.GPIO>=0.7.1; platform_system == 'Linux'",
+  "gpiozero>=2.0; platform_system == 'Linux'",
+]
 
 [project.scripts]
 shuttle-stack = "shuttle.cli:app"
@@ -31,6 +35,11 @@ perception_node = "robot_core.builtin_plugins:PerceptionNodePlugin"
 planner_node = "robot_core.builtin_plugins:PlannerNodePlugin"
 planner_stub_node = "robot_core.reference_plugins:PlannerStubNodePlugin"
 actuator_mock_node = "robot_core.reference_plugins:ActuatorMockNodePlugin"
+
+[project.entry-points."nervlynx.live_nodes"]
+skid_steer_drive = "robot_core.drive:SkidSteerDrive"
+scripted_drive = "robot_core.sim:ScriptedDriveSource"
+skid_steer_sim = "robot_core.sim:SkidSteerSim"
 
 [tool.setuptools]
 package-dir = {"" = "."}
