@@ -19,6 +19,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+      - name: Free disk space for the build
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
       - name: Stage the installer
         run: |
           cp deploy/pi/install.sh deploy/pi/pi-gen/stage-nervlynx/00-install/files/install.sh
@@ -42,7 +46,8 @@ jobs:
           locale: en_US.UTF-8
           timezone: Etc/UTC
           compression: xz
-          increase-runner-disk-size: true
+          increase-runner-disk-size: false
+          verbose-output: true
       - uses: actions/upload-artifact@v6
         with:
           name: nervlynx-pi-image
