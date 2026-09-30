@@ -7,7 +7,8 @@
       ...
 
 `LiveNode` is the class-based API for drivers that own hardware; `NodeContext` is what
-their hooks receive.
+their hooks receive. `skill` registers an action that people and agents can ask the
+robot to do (see `robot_core.skills`).
 """
 
 from typing import Any
@@ -15,10 +16,15 @@ from typing import Any
 from robot_core.live import LiveNode, NodeContext
 from robot_core.node_api import node
 
-__all__ = ["node", "LiveNode", "NodeContext", "__version__"]
+__all__ = ["node", "skill", "LiveNode", "NodeContext", "__version__"]
 
 
 def __getattr__(name: str) -> Any:
+  if name == "skill":
+    from robot_core.skills import skill
+
+    globals()["skill"] = skill
+    return skill
   if name != "__version__":
     raise AttributeError(f"module 'nervlynx' has no attribute {name!r}")
   from importlib.metadata import PackageNotFoundError, version

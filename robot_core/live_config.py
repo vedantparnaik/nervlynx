@@ -28,6 +28,7 @@ LIVE_BUILTINS: dict[str, str] = {
   "lidar": "robot_core.lidar:Lidar",
   "detector": "robot_core.detect:Detector",
   "ros2_bridge": "robot_core.ros2_bridge:Ros2Bridge",
+  "skills": "robot_core.skills:SkillRunner",
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes", "devices", "mesh"}
