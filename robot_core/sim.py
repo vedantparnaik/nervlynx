@@ -479,6 +479,15 @@ class SkidSteerSim(LiveNode):
           "collisions": self.collisions,
           "bumped": self.bumped,
           "ranges": dict(self.ranges),
+          "sensors": [
+            {
+              "name": s.name,
+              "angle_deg": round(math.degrees(s.angle_rad), 3),
+              "beam_deg": round(math.degrees(s.beam_rad), 3),
+              "max_range_m": s.max_range_m,
+            }
+            for s in self.sensors
+          ],
           "robot_radius_m": self.robot_radius_m,
           "world": self.world.to_dict(),
         }

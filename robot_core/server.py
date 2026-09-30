@@ -6,6 +6,8 @@ GET  /health     status summary
 GET  /graph      nodes, topics, and subscriptions
 GET  /stats      full runtime snapshot (JSON)
 GET  /faults     recent structured faults
+GET  /camera/<node>.mjpg     live stream of a camera node (multipart, one image per part)
+GET  /camera/<node>/latest   the newest frame of a camera node
 POST /estop      latch the e-stop (always allowed)
 POST /estop/clear            requires control access
 POST /publish {topic, schema, payload}   requires control access and an allowed topic
@@ -18,14 +20,31 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Event, Thread
 from typing import Any, Iterable
 from urllib.parse import parse_qs, urlparse
 
 from robot_core.live import LiveRuntime
 
 _MAX_BODY_BYTES = 64 * 1024
+_CAMERA_PATH = re.compile(r"^/camera/([A-Za-z0-9_.-]+?)(\.mjpg|/latest)$")
+_BOUNDARY = "nervlynxframe"
+
+
+class LiveHTTPServer(ThreadingHTTPServer):
+  """Threading server whose long-lived handlers (camera streams) end on shutdown."""
+
+  daemon_threads = True
+
+  def __init__(self, *args: Any, **kwargs: Any) -> None:
+    super().__init__(*args, **kwargs)
+    self.stopping = Event()
+
+  def shutdown(self) -> None:
+    self.stopping.set()
+    super().shutdown()
 
 
 def serve_live(
@@ -106,8 +125,39 @@ def serve_live(
         self._json(runtime.snapshot())
       elif path == "/faults":
         self._json([event.to_dict() for event in runtime.fault_events])
+      elif _CAMERA_PATH.match(path):
+        self._camera(*_CAMERA_PATH.match(path).groups())
       else:
         self._json({"error": "not found"}, 404)
+
+    def _camera(self, node_name: str, kind: str) -> None:
+      buffer = getattr(runtime.nodes.get(node_name), "frame_buffer", None)
+      if buffer is None:
+        self._json({"error": f"no camera node named {node_name!r}"}, 404)
+        return
+      if kind == "/latest":
+        frame = buffer.latest() or buffer.wait_newer(0, 2.0)
+        if frame is None:
+          self._json({"error": "no frame yet"}, 503)
+        else:
+          self._send(200, frame.data, frame.content_type)
+        return
+      self.send_response(200)
+      self.send_header("Content-Type", f"multipart/x-mixed-replace; boundary={_BOUNDARY}")
+      self.send_header("Cache-Control", "no-store")
+      self.end_headers()
+      seq = 0
+      try:
+        while not server.stopping.is_set():
+          frame = buffer.wait_newer(seq, 1.0)
+          if frame is None:
+            continue
+          seq = frame.seq
+          head = f"--{_BOUNDARY}\r\nContent-Type: {frame.content_type}\r\nContent-Length: {len(frame.data)}\r\n\r\n"
+          self.wfile.write(head.encode("ascii") + frame.data + b"\r\n")
+          self.wfile.flush()
+      except (BrokenPipeError, ConnectionResetError):
+        return
 
     def do_POST(self) -> None:  # noqa: N802
       path = urlparse(self.path).path
@@ -139,8 +189,7 @@ def serve_live(
       runtime.publish_external(topic, schema, payload, source="http")
       self._json({"ok": True})
 
-  server = ThreadingHTTPServer((host, port), Handler)
-  server.daemon_threads = True
+  server = LiveHTTPServer((host, port), Handler)
   Thread(target=server.serve_forever, name="nervlynx-http", daemon=True).start()
   return server
 
@@ -165,15 +214,23 @@ th,td{text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-
 .n{text-align:right}.bad{color:var(--bad)}.dim{color:var(--dim)}.cards{display:flex;gap:20px;flex-wrap:wrap}.cards b{display:block;font-size:20px}
 .pad{display:grid;grid-template-columns:repeat(3,64px);gap:6px;margin:8px 0}.pad button{height:48px;touch-action:none}.pad .hot{background:#1f6feb}
 td.last{max-width:640px;overflow:hidden;text-overflow:ellipsis;font:12px ui-monospace,Menlo,monospace;color:var(--dim)}
+.controls{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+#stick{width:160px;height:160px;border-radius:50%;border:1px solid var(--line);background:#0b0f14;position:relative;touch-action:none;user-select:none}
+#knob{width:60px;height:60px;border-radius:50%;background:#1f6feb;position:absolute;left:50px;top:50px;pointer-events:none}
+#camgrid{display:flex;gap:12px;flex-wrap:wrap}#camgrid figure{margin:0}#camgrid img{max-width:100%;width:480px;border-radius:6px;background:#000;display:block}
+#worldc{width:100%;max-width:640px;background:#0b0f14;border-radius:6px;display:block}
 </style></head><body>
 <header><h1 id="name">NervLynx</h1><span id="status" class="pill">...</span><span id="uptime" class="dim"></span><span class="spacer"></span>
 <button id="clear" hidden>Clear e-stop</button><button class="stop" id="estop">E-STOP</button></header>
 <main>
 <section><h2>Runtime</h2><div class="cards" id="cards"></div><p id="estopinfo" class="bad"></p></section>
-<section id="drive" hidden><h2>Drive &mdash; hold W A S D or arrows</h2>
-<div class="pad"><span></span><button data-k="w">&#9650;</button><span></span><button data-k="a">&#9664;</button><button data-k="s">&#9660;</button><button data-k="d">&#9654;</button></div>
+<section id="drive" hidden><h2>Drive &mdash; drag the stick, or hold W A S D / arrows</h2>
+<div class="controls"><div id="stick" role="application" aria-label="Drive joystick" tabindex="0"><div id="knob"></div></div>
+<div class="pad"><span></span><button data-k="w">&#9650;</button><span></span><button data-k="a">&#9664;</button><button data-k="s">&#9660;</button><button data-k="d">&#9654;</button></div></div>
 <label>Speed <input id="speed" type="range" min="0.1" max="1" step="0.05" value="0.5"> <span id="speedv">0.50</span></label>
-<p class="dim">Commands stream at 10 Hz while a key is held; release and the drive deadman stops the motors.</p></section>
+<p class="dim">Commands stream at 10 Hz while you hold; let go and the drive deadman stops the motors.</p></section>
+<section id="world" hidden><h2>Simulation</h2><canvas id="worldc" width="640" height="480"></canvas><p id="worldinfo" class="dim"></p></section>
+<section id="cameras" class="wide" hidden><h2>Cameras</h2><div id="camgrid"></div></section>
 <section class="wide"><h2>Nodes</h2><table id="nodes"></table></section>
 <section class="wide"><h2>Topics</h2><table id="topics"></table></section>
 <section class="wide"><h2>Recent faults</h2><table id="faults"></table></section>
@@ -204,12 +261,15 @@ async function refresh() {
   $('cards').innerHTML = [['published', m.published], ['delivered', m.delivered], ['dropped', m.dropped],
     ['queue', x.queue_depth], ['steps', x.steps], ['e-stops', s.estop.events], ['stalls', x.stalls]]
     .map(([k, v]) => '<div><span class="dim">' + k + '</span><b>' + v + '</b></div>').join('');
-  table($('nodes'), ['node', 'Hz', 'ticks', 'handled', 'errors', 'tick p95 ms', 'late p95 ms', 'handler p95 ms', 'state'],
+  table($('nodes'), ['node', 'Hz', 'ticks', 'handled', 'errors', 'tick p95 ms', 'late p95 ms', 'handler p95 ms', 'state', 'status'],
     Object.entries(s.nodes).map(([n, v]) => '<tr><td>' + esc(n) + (v.critical ? ' <span class="dim">(critical)</span>' : '') +
       '</td><td class="n">' + (v.rate_hz ?? '') + '</td><td class="n">' + v.ticks + '</td><td class="n">' + v.handled +
       '</td><td class="n' + (v.errors ? ' bad' : '') + '">' + v.errors + '</td><td class="n">' + num(v.tick_ms && v.tick_ms.p95, 3) +
       '</td><td class="n">' + num(v.lateness_ms && v.lateness_ms.p95, 3) + '</td><td class="n">' + num(v.handler_ms.p95, 3) +
-      '</td><td class="' + (v.stale || v.breaker_open ? 'bad' : 'dim') + '">' + (v.stale ? 'STALE' : v.breaker_open ? 'BREAKER OPEN' : 'ok') + '</td></tr>'));
+      '</td><td class="' + (v.stale || v.breaker_open ? 'bad' : 'dim') + '">' + (v.stale ? 'STALE' : v.breaker_open ? 'BREAKER OPEN' : 'ok') +
+      '</td><td class="last" title="' + esc(v.last_error || '') + '">' + esc(brief(v)) + '</td></tr>'));
+  showCameras(s.nodes);
+  drawWorld(s.nodes);
   table($('topics'), ['topic', 'count', 'Hz', 'latency p50 ms', 'p95 ms', 'last'],
     Object.entries(s.topics).map(([t, v]) => '<tr><td>' + esc(t) + '</td><td class="n">' + v.count + '</td><td class="n">' + num(v.rate_hz, 1) +
       '</td><td class="n">' + num(v.latency_ms.p50, 3) + '</td><td class="n">' + num(v.latency_ms.p95, 3) +
@@ -217,6 +277,62 @@ async function refresh() {
   table($('faults'), ['t (s)', 'severity', 'kind', 'message'], s.faults.slice().reverse().slice(0, 12).map(f =>
     '<tr><td class="n">' + num(f.t_s, 2) + '</td><td class="' + (['critical', 'error'].includes(f.severity) ? 'bad' : 'dim') + '">' +
     esc(f.severity) + '</td><td>' + esc(f.kind) + '</td><td>' + esc(f.message) + '</td></tr>'));
+}
+function brief(v) {
+  const st = Object.assign({}, v.status || {});
+  delete st.world; delete st.sensors;
+  if (st.waiting_for) return 'waiting for ' + st.waiting_for.join(', ');
+  if (st.stale_inputs) return 'paused: stale ' + st.stale_inputs.join(', ');
+  return Object.keys(st).length ? JSON.stringify(st) : '';
+}
+const cams = {};
+function showCameras(nodes) {
+  for (const [n, v] of Object.entries(nodes)) {
+    const st = v.status || {};
+    if (!st.camera) continue;
+    if (!cams[n]) {
+      const fig = document.createElement('figure');
+      fig.innerHTML = '<img alt="camera ' + esc(n) + '" src="/camera/' + encodeURIComponent(n) + '.mjpg"><figcaption class="dim"></figcaption>';
+      $('camgrid').appendChild(fig); cams[n] = fig; $('cameras').hidden = false;
+    }
+    cams[n].querySelector('figcaption').textContent = n + ' \u00b7 ' + st.source + ' \u00b7 ' + st.size.join('x') + ' \u00b7 ' + num(st.fps, 1) + ' fps';
+  }
+}
+const trail = [];
+function drawWorld(nodes) {
+  const sim = Object.values(nodes).map(v => v.status || {}).find(st => st.world);
+  if (!sim) return;
+  $('world').hidden = false;
+  const c = $('worldc'), g = c.getContext('2d'), w = sim.world;
+  const k = Math.min(c.width / w.width_m, c.height / w.height_m);
+  const X = x => x * k, Y = y => (w.height_m - y) * k;
+  g.clearRect(0, 0, c.width, c.height);
+  g.strokeStyle = '#8b949e'; g.lineWidth = 2; g.strokeRect(0, 0, X(w.width_m), w.height_m * k);
+  g.fillStyle = '#3a4250';
+  for (const o of w.obstacles) {
+    g.beginPath();
+    if (o.circle) { g.arc(X(o.circle[0]), Y(o.circle[1]), o.circle[2] * k, 0, 2 * Math.PI); }
+    else { const [x0, y0, x1, y1] = o.box; g.rect(X(x0), Y(y1), (x1 - x0) * k, (y1 - y0) * k); }
+    g.fill();
+  }
+  const last = trail[trail.length - 1];
+  if (!last || last[0] !== sim.x_m || last[1] !== sim.y_m) { trail.push([sim.x_m, sim.y_m]); if (trail.length > 400) trail.shift(); }
+  g.strokeStyle = '#1f6feb55'; g.lineWidth = 2; g.beginPath();
+  trail.forEach(([x, y], i) => i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))); g.stroke();
+  const h = sim.heading_deg * Math.PI / 180, r = sim.robot_radius_m;
+  for (const sn of sim.sensors || []) {
+    const a = h + sn.angle_deg * Math.PI / 180, half = Math.max(sn.beam_deg, 2) * Math.PI / 360;
+    const d = (sim.ranges || {})[sn.name] ?? sn.max_range_m;
+    const ox = sim.x_m + r * Math.cos(a), oy = sim.y_m + r * Math.sin(a);
+    g.fillStyle = d < sn.max_range_m ? '#f8514944' : '#3fb95033';
+    g.beginPath(); g.moveTo(X(ox), Y(oy)); g.arc(X(ox), Y(oy), d * k, -(a + half), -(a - half)); g.closePath(); g.fill();
+  }
+  g.fillStyle = sim.bumped ? '#f85149' : '#3fb950';
+  g.beginPath(); g.arc(X(sim.x_m), Y(sim.y_m), r * k, 0, 2 * Math.PI); g.fill();
+  g.strokeStyle = '#0e1116'; g.lineWidth = 3; g.beginPath(); g.moveTo(X(sim.x_m), Y(sim.y_m));
+  g.lineTo(X(sim.x_m + r * Math.cos(h)), Y(sim.y_m + r * Math.sin(h))); g.stroke();
+  $('worldinfo').textContent = 'collisions ' + sim.collisions + (sim.bumped ? ' (touching ' + sim.bumped + ')' : '') +
+    ' \u00b7 driven ' + num(sim.distance_m, 2) + ' m \u00b7 speed ' + num(sim.speed_mps, 2) + ' m/s';
 }
 setInterval(refresh, 500); refresh();
 if (CFG.allow_control && CFG.drive_topic) {
@@ -242,6 +358,24 @@ if (CFG.allow_control && CFG.drive_topic) {
     b.onpointerup = b.onpointerleave = () => release(b.dataset.k);
   });
   setInterval(() => { if (held.size) send(); }, 100);
+  const stick = $('stick'), knob = $('knob');
+  let stickCmd = null;
+  const sendStick = () => post('/publish', {topic: CFG.drive_topic, schema: 'DriveCommand', payload: stickCmd});
+  const moveStick = e => {
+    const b = stick.getBoundingClientRect(), R = b.width / 2;
+    let dx = (e.clientX - b.left - R) / R, dy = (e.clientY - b.top - R) / R;
+    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    knob.style.left = (50 + dx * 50) + 'px'; knob.style.top = (50 + dy * 50) + 'px';
+    stickCmd = {linear: -dy * speed(), angular: -dx * speed()};
+  };
+  stick.onpointerdown = e => { moveStick(e); sendStick(); try { stick.setPointerCapture(e.pointerId); } catch (_) {} };
+  stick.onpointermove = e => { if (stickCmd) moveStick(e); };
+  stick.onpointerup = stick.onpointercancel = () => {
+    if (!stickCmd) return;
+    stickCmd = {linear: 0, angular: 0}; sendStick(); stickCmd = null;
+    knob.style.left = knob.style.top = '50px';
+  };
+  setInterval(() => { if (stickCmd) sendStick(); }, 100);
 }
 </script></body></html>
 """
