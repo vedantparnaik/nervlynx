@@ -2,7 +2,8 @@
 
 ## One command on Raspberry Pi OS
 
-On a Pi with Raspberry Pi OS Bookworm (Lite is fine), 64-bit on a Pi 5, Pi 4, or Zero 2 W:
+On a Pi with Raspberry Pi OS Bookworm or Trixie (Lite is fine), 64-bit on a Pi 5, Pi 4, or
+Zero 2 W:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vedantparnaik/nervlynx/main/deploy/pi/install.sh | bash
@@ -31,7 +32,7 @@ has not yet been run on each Pi model.
 
 ## A ready-made SD card image
 
-The `pi-image` workflow builds Raspberry Pi OS Lite (64-bit) with NervLynx already
+The `pi-image` workflow builds Raspberry Pi OS Lite (64-bit, Trixie) with NervLynx already
 installed, using [pi-gen](https://github.com/RPi-Distro/pi-gen) and the same installer
 (`pi-gen/stage-nervlynx`). Run it from the repository's Actions tab (choose the NervLynx
 version to put in it), or push a `v*` tag to attach the image to that release. Download
