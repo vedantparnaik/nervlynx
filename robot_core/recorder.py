@@ -56,6 +56,15 @@ def _decode(row: dict[str, object]) -> RuntimeMessage:
   return RuntimeMessage(envelope=env, payload=payload)
 
 
+def encode_message(msg: RuntimeMessage) -> dict[str, object]:
+  """One trace row as a JSON-serialisable dict (the JSONL line format)."""
+  return _encode(msg)
+
+
+def decode_message(row: dict[str, object]) -> RuntimeMessage:
+  return _decode(row)
+
+
 def write_jsonl(path: str | Path, messages: Iterable[RuntimeMessage]) -> None:
   p = Path(path)
   p.parent.mkdir(parents=True, exist_ok=True)

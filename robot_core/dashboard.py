@@ -17,7 +17,7 @@ class DashboardSnapshot:
 
 
 def snapshot_runtime(runtime: PipelineRuntime) -> DashboardSnapshot:
-  subscriptions = {topic: len(handlers) for topic, handlers in runtime._subscriptions.items()}  # type: ignore[attr-defined]
+  subscriptions = {topic: len(nodes) for topic, nodes in runtime.subscriptions.items()}
   return DashboardSnapshot(
     subscriptions=subscriptions,
     node_heartbeats_count=len(runtime.node_heartbeats_ns),
