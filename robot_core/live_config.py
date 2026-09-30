@@ -28,7 +28,7 @@ LIVE_BUILTINS: dict[str, str] = {
   "lidar": "robot_core.lidar:Lidar",
 }
 
-_TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes"}
+_TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes", "devices", "mesh"}
 _RUNTIME_KEYS = {
   "clock",
   "max_queue_size",
@@ -43,7 +43,7 @@ _RUNTIME_KEYS = {
 }
 _SAFETY_KEYS = {"stale_after_s", "estop_on_stale", "start_in_estop"}
 _HARDWARE_KEYS = {"backend"}
-_NODE_KEYS = {"name", "plugin", "input_topics", "rate_hz", "critical", "stale_after_s", "topic", "schema", "params", "only"}
+_NODE_KEYS = {"name", "plugin", "input_topics", "rate_hz", "critical", "stale_after_s", "topic", "schema", "params", "only", "placement"}
 MODES = ("robot", "sim")
 
 
@@ -186,6 +186,12 @@ def validate_live_config(
   if not isinstance(nodes, list) or not nodes:
     issues.append("nodes must be a non-empty list")
     return issues
+  if "devices" in cfg or "mesh" in cfg or any(isinstance(n, dict) and "placement" in n for n in nodes):
+    from robot_core.mesh import validate_mesh_config
+
+    issues += validate_mesh_config(cfg)
+    if "mesh" in cfg and "devices" not in cfg:
+      issues.append("mesh needs a devices: section naming the computers to connect")
   if mode is not None and not select_mode(cfg, mode)["nodes"]:
     issues.append(f"no nodes run in {mode} mode")
     return issues
@@ -264,6 +270,20 @@ def clock_for_config(cfg: dict[str, Any], *, simulated: bool = False) -> Clock:
   return SystemClock()
 
 
+def node_input_topics(node_cfg: dict[str, Any], cfg: dict[str, Any], registry: PluginRegistry, backend_override: str | None = None) -> list[str]:
+  """The topics a configured node consumes (constructing it if needed; no hardware is touched)."""
+  if node_cfg.get("input_topics") is not None:
+    return list(node_cfg["input_topics"])
+  plugin = node_cfg["plugin"]
+  if registry.has_live_node(plugin):
+    factory = registry.get_live_node_factory(plugin)
+    instance = factory(**_node_params(factory, node_cfg.get("params") or {}, cfg, backend_override))
+    return list(getattr(instance, "input_topics", ()) or ())
+  if registry.has_node(plugin):
+    return list(getattr(registry.get_node(plugin), "input_topics", None) or [])
+  return []
+
+
 def build_live_runtime(
   cfg: dict[str, Any],
   registry: PluginRegistry,
@@ -272,12 +292,23 @@ def build_live_runtime(
   metrics: MetricsRegistry | None = None,
   backend_override: str | None = None,
   mode: str | None = None,
+  device: str | None = None,
+  mesh_transport: Any = None,
 ) -> LiveRuntime:
+  """With `device`, only the nodes placed on that device are built, plus a `mesh` node
+  that connects them to the other devices (`mesh_transport` overrides the configured one)."""
   issues = validate_live_config(cfg, registry, backend_override=backend_override, mode=mode)
   if issues:
     raise ValueError("invalid live config: " + "; ".join(issues))
   if mode is not None:
     cfg = select_mode(cfg, mode)
+  plan = None
+  if device is not None:
+    from robot_core.mesh import plan_mesh
+
+    full = cfg
+    plan = plan_mesh(full, device, lambda node: node_input_topics(node, full, registry, backend_override))
+    cfg = {**cfg, "nodes": plan.nodes}
   runtime_cfg = _section(cfg, "runtime")
   safety = _section(cfg, "safety")
   breaker = runtime_cfg.get("breaker") or {}
@@ -322,6 +353,20 @@ def build_live_runtime(
       critical=bool(node_cfg.get("critical", getattr(node, "critical", False))),
       stale_after_s=node_cfg.get("stale_after_s"),
     )
+  mesh_cfg = cfg.get("mesh")
+  if plan is not None and isinstance(mesh_cfg, dict):
+    from robot_core.mesh import MeshNode, create_transport, mesh_key
+
+    bridge = MeshNode(
+      runtime,
+      plan=plan,
+      transport=mesh_transport if mesh_transport is not None else create_transport(mesh_cfg),
+      key=mesh_key(mesh_cfg),
+      frame_fps=float(mesh_cfg.get("frame_fps", 10.0)),
+      max_skew_s=float(mesh_cfg.get("max_skew_s", 30.0)),
+    )
+    runtime.add_node("mesh", bridge)
+    runtime.add_message_listener(bridge.on_local_message)
   if safety.get("start_in_estop"):
     runtime.request_estop("start_in_estop is set in the config", source="config")
   return runtime

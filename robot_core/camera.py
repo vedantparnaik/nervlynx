@@ -74,6 +74,17 @@ def frames(name: str) -> FrameBuffer | None:
   return _FRAMES.get(name)
 
 
+def register_frames(name: str, buffer: FrameBuffer) -> FrameBuffer:
+  """Make `buffer` available as `frames(name)`; the mesh does this for cameras on other devices."""
+  _FRAMES[name] = buffer
+  return buffer
+
+
+def unregister_frames(name: str, buffer: FrameBuffer) -> None:
+  if _FRAMES.get(name) is buffer:
+    del _FRAMES[name]
+
+
 def encode_png_rgb(width: int, height: int, rows: Iterable[bytes]) -> bytes:
   """Minimal RGB PNG (8-bit, no filtering) using only zlib."""
 
@@ -193,7 +204,7 @@ class CameraNode(LiveNode):
       self._camera = None
       ctx.fault(f"camera {self.camera_name} unavailable, continuing without it: {exc}", kind="camera")
       return
-    _FRAMES[self.camera_name] = self.frame_buffer
+    register_frames(self.camera_name, self.frame_buffer)
 
   def _start_picamera2(self) -> None:
     from picamera2 import Picamera2  # type: ignore[import-not-found]
@@ -280,8 +291,7 @@ class CameraNode(LiveNode):
     elif self.active_source == "opencv" and self._camera is not None:
       self._camera.release()
     self._camera = None
-    if _FRAMES.get(self.camera_name) is self.frame_buffer:
-      del _FRAMES[self.camera_name]
+    unregister_frames(self.camera_name, self.frame_buffer)
 
   def status(self) -> dict[str, Any]:
     latest = self.frame_buffer.latest()

@@ -43,13 +43,16 @@ class SessionOptions:
   strict: bool = False
   quiet: bool = False
   fail_on_collision: bool = False
+  device: str | None = None
 
 
 def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) -> int:
   """Run `config` until the duration elapses or SIGINT/SIGTERM; return the process exit code.
 
   In `sim` mode every hardware node is forced onto mock pins unless `opts.backend` says
-  otherwise, and only nodes marked `only: sim` (or unmarked) run.
+  otherwise, and only nodes marked `only: sim` (or unmarked) run. When the config lists
+  `devices`, robot mode runs this device's nodes (from `opts.device` or the hostname) and
+  connects them to the others; sim mode runs every node here unless a device is given.
   """
   backend = opts.backend or ("mock" if opts.mode == "sim" else None)
   try:
@@ -66,7 +69,22 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
   if clock.simulated and opts.duration_s is None:
     echo("config_error: --duration-s is required with a simulated clock")
     return 2
-  runtime = build_live_runtime(cfg, reg, clock=clock, backend_override=backend, mode=opts.mode)
+  device = opts.device
+  if cfg.get("devices"):
+    from robot_core.mesh import MeshError, detect_device
+
+    try:
+      if device is None and opts.mode == "robot":
+        device = detect_device(cfg)
+      runtime = build_live_runtime(cfg, reg, clock=clock, backend_override=backend, mode=opts.mode, device=device)
+    except MeshError as exc:
+      echo(f"{config}: config_error: {exc}")
+      return 1
+  elif device is not None:
+    echo(f"{config}: config_error: --device needs a devices: section in the config")
+    return 1
+  else:
+    runtime = build_live_runtime(cfg, reg, clock=clock, backend_override=backend, mode=opts.mode)
 
   out_dir = opts.run_dir or Path("logs/live") / f"{runtime.name}-{time.strftime('%Y%m%d-%H%M%S')}"
   out_dir.mkdir(parents=True, exist_ok=True)
@@ -110,7 +128,8 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
       previous[sig] = signal.signal(sig, lambda *_: runtime.stop())
     except ValueError:  # not on the main thread
       pass
-  echo(f"run_live_started graph={runtime.name} mode={opts.mode} clock={'simulated' if clock.simulated else 'system'} run_dir={out_dir}")
+  where = f" device={device}" if device else ""
+  echo(f"run_live_started graph={runtime.name} mode={opts.mode}{where} clock={'simulated' if clock.simulated else 'system'} run_dir={out_dir}")
   wall_started = time.time()
   exit_code = 0
   try:
@@ -141,7 +160,7 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
     wall_started=wall_started,
     wall_finished=wall_finished,
     artifacts=artifacts,
-    extra={"trace_messages": recorder.written if recorder else 0, "fault_log_entries": fault_log.count, "mode": opts.mode},
+    extra={"trace_messages": recorder.written if recorder else 0, "fault_log_entries": fault_log.count, "mode": opts.mode, "device": device},
   )
   (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
   markdown = render_markdown(report)

@@ -408,12 +408,14 @@ def run_live(
   record_exclude: list[str] = typer.Option([], "--record-exclude", help="Topic to leave out of the trace (repeatable)."),
   strict: bool = typer.Option(False, "--strict", help="Exit 2 if any node error, watchdog fault, stall, or e-stop occurred."),
   quiet: bool = typer.Option(False, "--quiet", help="Do not print the Markdown report at exit."),
+  device: Optional[str] = typer.Option(None, "--device", help="Run the nodes placed on this device and join the mesh (default: from the hostname)."),
 ) -> None:
   """Run a live graph continuously with dashboard, trace recording, and an end-of-run report."""
   if mode not in MODES:
     typer.echo(f"config_error: --mode must be one of {', '.join(MODES)}")
     raise typer.Exit(code=2)
   opts = SessionOptions(
+    device=device,
     mode=mode,
     duration_s=duration_s,
     sim_time=sim_time,

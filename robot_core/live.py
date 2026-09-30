@@ -513,6 +513,10 @@ class LiveRuntime(PipelineRuntime):
     return self._estop
 
   @property
+  def estop_reason(self) -> str:
+    return self._estop_reason
+
+  @property
   def fault_events(self) -> list[FaultEvent]:
     with self._fault_lock:
       return list(self._fault_events)

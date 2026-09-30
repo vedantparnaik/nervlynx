@@ -90,12 +90,14 @@ def sim(
   strict: bool = typer.Option(False, "--strict", help="Exit 2 on node errors, watchdog faults, e-stops, or collisions."),
   quiet: bool = typer.Option(False, "--quiet", help="Do not print the report at the end."),
   run_dir: Optional[Path] = typer.Option(None, "--run-dir", help="Where to write the run report and trace."),
+  device: Optional[str] = typer.Option(None, "--device", help="Simulate only this device's nodes and join the mesh (default: every node here)."),
 ) -> None:
   """Run the project in simulation: mock pins, `only: sim` nodes, driving allowed from the dashboard."""
   from robot_core.session import SessionOptions, run_session
 
   _require_config(config)
   opts = SessionOptions(
+    device=device,
     mode="sim",
     duration_s=duration_s if duration_s is not None or not fast else 60.0,
     sim_time=fast,
@@ -122,6 +124,7 @@ def run(
   no_server: bool = typer.Option(False, "--no-server", help="Do not start the dashboard."),
   quiet: bool = typer.Option(False, "--quiet", help="Do not print the report at the end."),
   run_dir: Optional[Path] = typer.Option(None, "--run-dir", help="Where to write the run report and trace."),
+  device: Optional[str] = typer.Option(None, "--device", help="Which of the config's devices this is (default: matched by hostname)."),
 ) -> None:
   """Run the project on the robot: real pins (backend auto), `only: robot` nodes."""
   import platform
@@ -132,6 +135,7 @@ def run(
   if not no_server and host in ("0.0.0.0", ""):
     typer.echo(f"open http://{platform.node() or 'localhost'}.local:{port}/ from a phone or laptop on the same network")
   opts = SessionOptions(
+    device=device,
     mode="robot",
     duration_s=duration_s,
     host=host,
