@@ -339,6 +339,34 @@ def doctor(
   raise typer.Exit(code=1 if any(check.status == FAIL for check in checks) else 0)
 
 
+@app.command("scan")
+def scan_cmd(
+  bus: int = typer.Option(1, "--bus", help="I2C bus number (1 on a Raspberry Pi)."),
+  output: Optional[Path] = typer.Option(None, "--output", "-o", help="Also write the suggested nodes to this file."),
+  as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+  """Find attached sensors (I2C, USB serial, cameras) and suggest nodes for robot.yaml."""
+  from robot_core.scan import draft_nodes_yaml, scan
+
+  found, notes = scan(bus_number=bus)
+  if as_json:
+    typer.echo(json.dumps({"found": [item.to_dict() for item in found], "notes": notes}, indent=2))
+    return
+  if not found:
+    typer.echo("nothing found on I2C, USB serial, or cameras")
+  for item in found:
+    driver = f"  -> plugin: {item.node}" if item.node else ""
+    typer.echo(f"  {item.kind:<6} {item.where:<28} {item.name}{driver}")
+  for note in notes:
+    typer.echo(f"  note: {note}")
+  draft = draft_nodes_yaml(found)
+  if any(item.node for item in found):
+    typer.echo("\n" + draft)
+  if output is not None:
+    output.write_text(draft, encoding="utf-8")
+    typer.echo(f"wrote {output}")
+
+
 @app.command("version")
 def version() -> None:
   """Print the installed nervlynx package version."""
