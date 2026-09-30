@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 BACKENDS = ("mock", "rpi_gpio", "gpiozero", "auto")
-DRIVERS = ("bts7960", "tb6612")
+DRIVERS = ("bts7960", "tb6612", "l298n")
 DEVICE_TREE_MODEL = Path("/proc/device-tree/model")
 _RP1_MODEL = re.compile(r"Raspberry Pi (?:5|500)\b|Compute Module 5\b")
 _GPIO_INSTALL_HINT = "sudo apt install python3-gpiozero python3-lgpio (a virtualenv needs --system-site-packages to see them)"
@@ -356,8 +356,54 @@ class TB6612Motor(Motor):
     self.duty = s
 
 
-_REQUIRED_PINS = {"bts7960": ("rpwm", "lpwm"), "tb6612": ("in1", "in2", "pwm")}
-_OPTIONAL_PINS = {"bts7960": ("enable_pins",), "tb6612": ("stby",)}
+class L298NMotor(Motor):
+  """One L298N channel. With `en`, IN1/IN2 set direction and EN carries PWM (jumper removed);
+  without it (EN jumpered high), IN1/IN2 carry PWM themselves, like a BTS7960."""
+
+  def __init__(
+    self,
+    backend: PinBackend,
+    name: str,
+    in1: int,
+    in2: int,
+    *,
+    en: int | None = None,
+    invert: bool = False,
+    frequency_hz: float = 1000.0,
+  ) -> None:
+    super().__init__(name, invert)
+    self._backend = backend
+    self.in1 = in1
+    self.in2 = in2
+    self.en = en
+    if en is None:
+      backend.setup_pwm(in1, frequency_hz)
+      backend.setup_pwm(in2, frequency_hz)
+    else:
+      backend.setup_digital(in1, False)
+      backend.setup_digital(in2, False)
+      backend.setup_pwm(en, frequency_hz)
+
+  def drive(self, speed: float) -> None:
+    s = self._bridge_speed(speed)
+    if self.en is None:
+      forward, reverse = (self.in1, self.in2) if s >= 0 else (self.in2, self.in1)
+      self._backend.write_pwm(reverse, 0.0)
+      self._backend.write_pwm(forward, abs(s))
+    elif s == 0:
+      self._backend.write_pwm(self.en, 0.0)
+      self._backend.write_digital(self.in1, False)
+      self._backend.write_digital(self.in2, False)
+    else:
+      on, off = (self.in1, self.in2) if s > 0 else (self.in2, self.in1)
+      self._backend.write_digital(off, False)
+      self._backend.write_digital(on, True)
+      self._backend.write_pwm(self.en, abs(s))
+    self.duty = s
+
+
+_REQUIRED_PINS = {"bts7960": ("rpwm", "lpwm"), "tb6612": ("in1", "in2", "pwm"), "l298n": ("in1", "in2")}
+_OPTIONAL_PINS = {"bts7960": ("enable_pins",), "tb6612": ("stby",), "l298n": ("en",)}
 
 
 def validate_motor_specs(driver: str, specs: Iterable[dict[str, Any]]) -> list[str]:
@@ -383,6 +429,8 @@ def validate_motor_specs(driver: str, specs: Iterable[dict[str, Any]]) -> list[s
     if "invert" in spec and not isinstance(spec["invert"], bool):
       issues.append(f"{label}.invert must be true or false")
     pins: list[tuple[str, Any]] = [(field, spec.get(field)) for field in _REQUIRED_PINS[driver]]
+    if driver == "l298n" and spec.get("en") is not None:
+      pins.append(("en", spec["en"]))
     for field in _REQUIRED_PINS[driver]:
       if field not in spec:
         issues.append(f"{label}: missing required pin {field}")
@@ -434,6 +482,17 @@ def build_motor(backend: PinBackend, driver: str, spec: dict[str, Any], *, frequ
       int(spec["in2"]),
       int(spec["pwm"]),
       stby=int(stby) if stby is not None else None,
+      invert=invert,
+      frequency_hz=frequency_hz,
+    )
+  if driver == "l298n":
+    en = spec.get("en")
+    return L298NMotor(
+      backend,
+      name,
+      int(spec["in1"]),
+      int(spec["in2"]),
+      en=int(en) if en is not None else None,
       invert=invert,
       frequency_hz=frequency_hz,
     )

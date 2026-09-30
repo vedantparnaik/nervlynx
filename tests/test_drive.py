@@ -204,7 +204,7 @@ def test_motor_spec_validation() -> None:
   assert any("missing required pin lpwm" in i for i in validate_motor_specs("bts7960", [{"rpwm": 1}]))
   assert any("unknown fields" in i for i in validate_motor_specs("bts7960", [{"rpwm": 1, "lpwm": 2, "pwm": 3}]))
   assert any("shared enable/standby" in i for i in validate_motor_specs("tb6612", [{"in1": 1, "in2": 2, "pwm": 3, "stby": 3}]))
-  assert validate_motor_specs("l298n", []) == ["unknown motor driver 'l298n'; expected one of bts7960, tb6612"]
+  assert validate_motor_specs("not_a_driver", []) == ["unknown motor driver 'not_a_driver'; expected one of bts7960, tb6612, l298n"]
 
 
 def test_drive_constructor_rejects_bad_config_without_touching_hardware() -> None:
