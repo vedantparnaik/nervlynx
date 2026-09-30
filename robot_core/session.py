@@ -35,7 +35,7 @@ class SessionOptions:
   port: int = 9120
   no_server: bool = False
   allow_control: bool = False
-  control_topics: Sequence[str] = ("cmd.drive",)
+  control_topics: Sequence[str] = ("cmd.drive", "agent.command")
   control_token: str | None = None
   run_dir: Path | None = None
   no_record: bool = False

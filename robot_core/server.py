@@ -67,10 +67,13 @@ def serve_live(
   """`config_path` (robot.yaml) is where the calibration wizard saves calibration.yaml;
   without it the wizard still works but cannot save."""
   topics = tuple(control_topics)
-  page = _DASHBOARD_HTML.replace(
-    "__CONFIG__",
-    json.dumps({"allow_control": allow_control, "drive_topic": topics[0] if allow_control and topics else None}),
-  ).encode("utf-8")
+  drive_topic = next((t for t in topics if t != "agent.command"), None)
+  config = {
+    "allow_control": allow_control,
+    "drive_topic": drive_topic if allow_control else None,
+    "talk_topic": "agent.command" if allow_control and "agent.command" in topics else None,
+  }
+  page = _DASHBOARD_HTML.replace("__CONFIG__", json.dumps(config)).encode("utf-8")
 
   class Handler(BaseHTTPRequestHandler):
     def log_message(self, _format: str, *_args: object) -> None:
@@ -312,6 +315,8 @@ td.last{max-width:640px;overflow:hidden;text-overflow:ellipsis;font:12px ui-mono
 #camgrid{display:flex;gap:12px;flex-wrap:wrap}#camgrid figure{margin:0}#camgrid img{max-width:100%;width:480px;border-radius:6px;background:#000;display:block}
 #worldc{width:100%;max-width:640px;background:#0b0f14;border-radius:6px;display:block}
 #lidarc{width:100%;max-width:360px;background:#0b0f14;border-radius:50%;display:block}
+#talktext{flex:1;min-width:12em;font:inherit;padding:6px 8px;border-radius:6px;border:1px solid var(--line);background:#0b0f14;color:var(--text)}
+#reply{font-size:16px;margin:8px 0 2px}
 h3{font-size:13px;margin:14px 0 6px}.warn{color:var(--warn)}.calnode+.calnode{border-top:1px solid var(--line);margin-top:10px}
 #calibbody p{margin:6px 0;line-height:2.4}#calibbody input[type=range]{width:220px;max-width:100%;vertical-align:middle}
 </style></head><body>
@@ -324,6 +329,11 @@ h3{font-size:13px;margin:14px 0 6px}.warn{color:var(--warn)}.calnode+.calnode{bo
 <div class="pad"><span></span><button data-k="w">&#9650;</button><span></span><button data-k="a">&#9664;</button><button data-k="s">&#9660;</button><button data-k="d">&#9654;</button></div></div>
 <label>Speed <input id="speed" type="range" min="0.1" max="1" step="0.05" value="0.5"> <span id="speedv">0.50</span></label>
 <p class="dim">Commands stream at 10 Hz while you hold; let go and the drive deadman stops the motors.</p></section>
+<section id="talk" hidden><h2>Talk to the robot</h2>
+<form id="talkform" class="controls"><input id="talktext" placeholder="turn left and drive forward one metre" autocomplete="off" aria-label="Command">
+<button id="mic" type="button" hidden>Talk</button><button type="submit">Send</button></form>
+<p id="talkhint" class="dim"></p><p id="reply"></p><p id="plan" class="dim"></p>
+<label class="dim"><input type="checkbox" id="speak"> Speak replies</label></section>
 <section id="world" hidden><h2>Simulation</h2><canvas id="worldc" width="640" height="480"></canvas><p id="worldinfo" class="dim"></p></section>
 <section id="lidar" hidden><h2>LiDAR</h2><canvas id="lidarc" width="360" height="360"></canvas><p id="lidarinfo" class="dim"></p></section>
 <section id="cameras" class="wide" hidden><h2>Cameras</h2><div id="camgrid"></div></section>
@@ -370,6 +380,7 @@ async function refresh() {
   showCameras(s.nodes);
   drawWorld(s.nodes);
   drawScan(s.nodes);
+  pollTalk(s.nodes);
   table($('topics'), ['topic', 'count', 'Hz', 'latency p50 ms', 'p95 ms', 'last'],
     Object.entries(s.topics).map(([t, v]) => '<tr><td>' + esc(t) + '</td><td class="n">' + v.count + '</td><td class="n">' + num(v.rate_hz, 1) +
       '</td><td class="n">' + num(v.latency_ms.p50, 3) + '</td><td class="n">' + num(v.latency_ms.p95, 3) +
@@ -464,6 +475,46 @@ function drawWorld(nodes) {
   g.lineTo(X(sim.x_m + r * Math.cos(h)), Y(sim.y_m + r * Math.sin(h))); g.stroke();
   $('worldinfo').textContent = 'collisions ' + sim.collisions + (sim.bumped ? ' (touching ' + sim.bumped + ')' : '') +
     ' \u00b7 driven ' + num(sim.distance_m, 2) + ' m \u00b7 speed ' + num(sim.speed_mps, 2) + ' m/s';
+}
+let lastReply = null;
+const sendCommand = text => post('/publish', {topic: CFG.talk_topic, schema: 'Command', payload: {text}});
+async function pollTalk(nodes) {
+  if (!CFG.talk_topic || !Object.values(nodes).some(v => (v.status || {}).agent)) return;
+  $('talk').hidden = false;
+  try {
+    const r = await fetch('/topic/agent.say', {cache: 'no-store'});
+    if (r.ok) {
+      const said = await r.json();
+      if (lastReply !== null && said.id !== lastReply) {
+        $('reply').textContent = said.text;
+        if ($('speak').checked && window.speechSynthesis) speechSynthesis.speak(new SpeechSynthesisUtterance(said.text));
+      }
+      lastReply = said.id;
+    } else if (lastReply === null) lastReply = 0;
+    const p = await fetch('/topic/agent.status', {cache: 'no-store'});
+    if (p.ok) { const st = await p.json(); $('plan').textContent = st.state + ': ' + st.message; }
+  } catch (e) { /* offline; refresh() says so */ }
+}
+if (CFG.talk_topic) {
+  $('talkform').onsubmit = e => {
+    e.preventDefault();
+    const text = $('talktext').value.trim();
+    if (text) { sendCommand(text); $('talktext').value = ''; }
+  };
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (Recognition && window.isSecureContext) {
+    $('mic').hidden = false;
+    $('mic').onclick = () => {
+      const r = new Recognition();
+      r.lang = navigator.language || 'en-US';
+      r.onresult = ev => { const text = ev.results[0][0].transcript; $('talktext').value = text; sendCommand(text); };
+      r.onend = () => { $('mic').textContent = 'Talk'; };
+      $('mic').textContent = 'Listening...';
+      r.start();
+    };
+  } else {
+    $('talkhint').textContent = "To speak instead of typing, use your keyboard's microphone key (browsers only allow voice input over https or on localhost).";
+  }
 }
 let lastScan = null;
 async function drawScan(nodes) {
