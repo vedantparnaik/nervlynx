@@ -336,6 +336,29 @@ servos stay where they were, which keeps an arm from dropping what it holds; wit
 `relax` they go limp and stay limp until a command moves them again. Power servos from
 their own 5-6 V supply (the board's V+ terminal), never from the Pi's 5 V pin.
 
+### `gps_nmea`
+
+Any NMEA 0183 GPS (u-blox NEO-6M/7M/M8N/M9N and most others) on USB or the Pi's UART
+(`/dev/serial0`: GPS TX to GPIO15, enabled with `raspi-config` > Interface Options > Serial
+Port, login shell off). Sentences are checksum-checked and read without blocking; GGA and
+RMC become a fix on `gps`:
+
+```json
+{"fix": true, "lat_deg": 51.4779, "lon_deg": -0.0015, "alt_m": 45.2, "sats": 9, "hdop": 0.9,
+ "speed_mps": 0.4, "course_deg": 87.0, "quality": "gps", "utc": "12:35:19"}
+```
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `port` | `auto` | A u-blox/PL2303 USB receiver if one is plugged in, else `/dev/serial0` |
+| `baud` | 9600 | Most modules ship at 9600 |
+| `timeout_s` | 3.0 | Report a fault (with wiring hints) when no sentence arrives for this long |
+| `mock_origin` | `[51.4779, -0.0015]` | Where the mock receiver is; in the simulator it follows `odom`, treating the sim's x as east and y as north |
+
+Until the receiver has a fix (from 30 s to a few minutes under open sky after a cold
+start) `fix` is false and the position is `None`. `robot_core.gps` also has
+`distance_m`, `bearing_deg`, and `offset` for waypoint code.
+
 ## Safety model
 
 Layered so that no single failure leaves motors running:
