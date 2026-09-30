@@ -252,6 +252,22 @@ against before the robot exists:
     seed: 0                                # sensor noise is repeatable per seed
 ```
 
+People and other moving things go in `world.targets`, and simulated `cameras` see them
+the way the `detector` node would, publishing the same payload on `detections.<name>`:
+
+```yaml
+    world:
+      targets:
+        - {label: person, path: [[1, 1], [6, 1], [6, 4]], speed_mps: 0.3}   # loops; loop: false walks back
+        - {label: dog, at: [2.0, 3.5], radius_m: 0.25}                      # stands still
+    cameras:
+      - {name: front, fov_deg: 62, range_m: 6.0}   # angle_deg, height_m, labels, every_n_ticks too
+```
+
+Targets block the robot, its range sensors, and its LiDAR, are hidden behind obstacles,
+and wait rather than walk into the robot. A box's height shrinks with distance just as a
+real person's does, which is what the follow-me template steers by.
+
 `lidar` takes `topic` (`scan`), `bins` (360), `range_min_m` / `range_max_m` (0.05 / 8.0),
 `noise_m`, and `every_n_ticks` (5, so 10 Hz at `rate_hz` 50); simulated scans also carry
 the `pose` they were taken from. The dashboard draws the scan in the world view and in a
