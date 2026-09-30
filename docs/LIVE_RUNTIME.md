@@ -359,6 +359,38 @@ Until the receiver has a fix (from 30 s to a few minutes under open sky after a 
 start) `fix` is false and the position is `None`. `robot_core.gps` also has
 `distance_m`, `bearing_deg`, and `offset` for waypoint code.
 
+### `lidar`
+
+2D LiDAR: LDROBOT LD19/LD06 (`model: ld19` or `ld06`, 230400 baud) or any Slamtec RPLidar
+(`model: rplidar`: A1/A2M8 at 115200, A2M12/A3/S1 at 256000, C1 at 460800; set `baud`).
+A background thread parses the serial stream (LD packets are CRC-checked; RPLidar samples
+are validated and the motor is started and stopped), and each whole revolution is
+published on `scan`:
+
+```json
+{"ranges_m": [0.82, null, ...], "angle_min_deg": 0.0, "angle_increment_deg": 1.0,
+ "range_min_m": 0.05, "range_max_m": 12.0, "nearest": {"distance_m": 0.42, "angle_deg": 348.0},
+ "points": 452, "scan_hz": 10.0, "model": "ld19"}
+```
+
+`ranges_m[i]` is the closest return in the bin at `i * angle_increment_deg`,
+counter-clockwise from the robot's front (90 is left, as in ROS), or `null` when nothing
+came back. `robot_core.lidar.sector_min(scan, center_deg, width_deg)` gives the nearest
+thing in a sector, e.g. `sector_min(scan, 0, 60)` straight ahead.
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `model` | required | `ld19`, `ld06`, or `rplidar` |
+| `port` / `baud` | `auto` / per model | `auto` picks the one CP210x USB adapter |
+| `bins` | 360 | Angular bins per scan |
+| `range_min_m` / `range_max_m` | 0.05 / 12.0 | Returns outside this are dropped |
+| `mount_deg` / `upside_down` | 0 / false | How the LiDAR's zero is turned relative to the robot's front (counter-clockwise), and whether it is mounted upside down |
+| `motor_pwm` | 660 | RPLidar A2/A3 motor speed (A1 and C1 run from DTR) |
+| `mock_range_m` | none | What the mock sees in every direction (default: nothing) |
+
+The simulator publishes the same scans from its world with `skid_steer_sim`'s `lidar:`
+setting, and the dashboard draws them.
+
 ## Safety model
 
 Layered so that no single failure leaves motors running:

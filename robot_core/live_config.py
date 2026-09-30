@@ -25,6 +25,7 @@ LIVE_BUILTINS: dict[str, str] = {
   "esp32_link": "robot_core.link:Esp32Link",
   "pca9685_servos": "robot_core.servos:Pca9685Servos",
   "gps_nmea": "robot_core.gps:GpsNmea",
+  "lidar": "robot_core.lidar:Lidar",
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes"}
