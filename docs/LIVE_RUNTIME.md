@@ -188,6 +188,20 @@ used next to its report.
 
 ## Built-in live nodes
 
+| Plugin | What it is | Details |
+| --- | --- | --- |
+| `skid_steer_drive` | DC motors on L298N, TB6612, or BTS7960 drivers | below |
+| `hcsr04_range`, `mpu6050_imu`, `gps_nmea`, `lidar` | Distance, IMU, GPS, and LiDAR sensors | below |
+| `camera`, `detector` | Pi or USB camera, and object detection on its frames | below |
+| `pca9685_servos` | Hobby servos on a PCA9685 board | below |
+| `wheel_odometry`, `esp32_link` | Odometry from encoders; motors and encoders on a microcontroller | below, [ESP32_LINK.md](ESP32_LINK.md) |
+| `skid_steer_sim`, `scripted_drive` | The simulator (world, sensors, people, cameras) and scripted commands | below |
+| `skills`, `agent`, `voice` | Named actions, plain-language and LLM agents, microphone and speaker | [AGENTS.md](AGENTS.md) |
+| `ros2_bridge` | Topics to and from ROS 2 | [ROS2.md](ROS2.md) |
+
+Every node that takes a `backend` gets `hardware.backend` by default, and `nervlynx sim`
+switches them all to mock.
+
 ### `skid_steer_drive`
 
 Consumes drive commands, applies them to motors at `rate_hz`, and publishes `drive.state`.

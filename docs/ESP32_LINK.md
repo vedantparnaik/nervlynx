@@ -57,7 +57,13 @@ nodes:
 It publishes `link.encoders` (`{"left_ticks", "right_ticks"}`) and shows the port,
 firmware, connection state, and watchdog trips in the dashboard. With `backend: mock` (or
 `auto` on a laptop) it talks to a simulated board, so the config also runs in `nervlynx
-sim`.
+sim`. Add `wheel_odometry` to turn the counts into `odom` (position and speed) for skills
+and the ROS 2 bridge:
+
+```yaml
+  - plugin: wheel_odometry
+    params: {ticks_per_meter: 4700, track_width_m: 0.16}
+```
 
 Next steps: closed-loop wheel speed (PID on the board), servo channels, IMU reads on the
 board, and a MicroPython build for the Raspberry Pi Pico.

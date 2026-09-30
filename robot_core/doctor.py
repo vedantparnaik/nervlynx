@@ -28,7 +28,7 @@ _PSU_FIX = (
   "and power the motors from their own battery or regulator."
 )
 _COOLING_FIX = "Add a heatsink or fan, and keep the Pi out of enclosed spaces while motors run."
-_OPTIONAL_MODULES = ("gpiozero", "lgpio", "RPi.GPIO", "picamera2", "cv2", "smbus2", "serial", "zmq", "zenoh")
+_OPTIONAL_MODULES = ("gpiozero", "lgpio", "RPi.GPIO", "picamera2", "cv2", "smbus2", "serial", "zmq", "zenoh", "numpy", "onnxruntime", "vosk", "rclpy")
 
 
 @dataclass(frozen=True)
