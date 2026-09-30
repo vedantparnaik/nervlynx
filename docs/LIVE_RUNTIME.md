@@ -178,6 +178,35 @@ First-order kinematic plant driven by `drive.state` duty: `max_speed_mps`, `trac
 `time_constant_s`, `stiction_duty`, `odom_every_n_ticks`. Publishes `odom` with pose,
 speed, yaw rate, and distance.
 
+Give it a `world` and it becomes a small 2D simulator you can develop obstacle avoidance
+against before the robot exists:
+
+```yaml
+- name: sim
+  plugin: skid_steer_sim
+  rate_hz: 50
+  params:
+    world:
+      width_m: 4.0                         # walls at x = 0..4, y = 0..3
+      height_m: 3.0
+      obstacles:
+        - {circle: [3.0, 1.5, 0.25]}       # x, y, radius
+        - {box: [0.5, 2.2, 1.0, 2.8]}      # x_min, y_min, x_max, y_max
+    start: [1.0, 1.0, 0.0]                 # x, y, heading_deg (default: arena centre)
+    robot_radius_m: 0.12
+    range_sensors:                         # publish range.<name>
+      - {name: front, angle_deg: 0, max_range_m: 2.0, noise_m: 0.01}
+      - {name: left, angle_deg: 45, max_range_m: 1.0}
+    range_every_n_ticks: 2                 # 25 Hz at rate_hz 50
+    seed: 0                                # sensor noise is repeatable per seed
+```
+
+Range readings are `{"distance_m", "max_range_m", "hit"}`, measured from the robot's edge
+and capped at `max_range_m` (`hit` is false when nothing is in range). Walls and obstacles
+stop the robot: it stalls at the contact point, each new contact counts as a collision
+(`nervlynx_sim_collisions_total`, a `sim_collision` fault, and `collisions` in `/stats`),
+and it counts again only after it has moved 1 cm clear.
+
 ## Safety model
 
 Layered so that no single failure leaves motors running:
