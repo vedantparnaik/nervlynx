@@ -253,6 +253,45 @@ Every `run-live` session writes `logs/live/<graph>-<timestamp>/` (or `--run-dir`
 `--strict` makes the command exit 2 if any node error, watchdog fault, stall, or e-stop
 occurred, which is handy in CI and soak tests.
 
+## Writing a node as a function
+
+Put a file in a `nodes/` folder next to your config. Every `@node` in `nodes/*.py` becomes a
+plugin the config can use by name, with no packaging or entry points:
+
+```python
+# nodes/avoid.py
+from nervlynx import node
+
+
+@node(inputs=["range.front"], outputs="cmd.drive", rate_hz=20)
+def avoid(front, *, stop_m=0.3):
+  if front["distance_m"] < stop_m:
+    return {"linear": 0.0, "angular": 0.8}
+  return {"linear": 0.25, "angular": 0.0}
+```
+
+```yaml
+# robot.yaml
+nodes:
+  - plugin: avoid
+    params: {stop_m: 0.4}      # overrides the keyword-only settings
+```
+
+- Positional parameters get the latest payload of each input, in order. Keyword-only
+  parameters are settings; `ctx` (the `NodeContext`) and `state` (a dict kept between
+  calls) are filled in when you declare them.
+- With `rate_hz` the function runs at that rate on the newest inputs; without it, it runs
+  on every incoming message. It waits until every input has arrived.
+- It pauses while any input is older than `max_age_s` (default 1.0 s; `None` disables the
+  check), so a dead sensor lets the drive deadman stop the robot instead of steering on
+  stale data. `/stats` shows `waiting_for` and `stale_inputs`.
+- Return `None` (publish nothing), a dict for the single output, a number/bool/string
+  (published as `{"value": x}`), a dict keyed by topic for several outputs, or a list of
+  `(topic, payload)` pairs. Outputs continue the trace of the newest input, so
+  sensor-to-command latency shows up in the report.
+- The decorated function stays a plain function, so you can unit-test it directly.
+- `@node` also works on a `LiveNode` subclass (below) to set its inputs and rate.
+
 ## Writing a live node
 
 ```python
