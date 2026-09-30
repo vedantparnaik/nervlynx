@@ -21,6 +21,18 @@ What you get:
 - The same project runs on a Pi: `nervlynx doctor`, then `nervlynx deploy pi@<pi>.local
   --service` from the laptop (see the main README).
 
+Where to go next:
+- `nervlynx new buddy --template follow-me`: a robot that follows a person with a camera
+  and a detector; in the simulator a person walks laps around the room.
+- The dashboard's **Calibrate** section fixes backwards motors, IMU mounting, and servo
+  limits on the real robot, and **Talk to the robot** takes commands like "turn left and
+  drive forward one metre" once you add the `skills` and `agent` nodes
+  ([AGENTS.md](AGENTS.md)).
+- More sensors: `pca9685_servos`, `gps_nmea`, `lidar`, `wheel_odometry`
+  ([LIVE_RUNTIME.md](LIVE_RUNTIME.md)); `nervlynx scan` suggests them.
+- A Pi plus an Orin NX (or a laptop) as one robot: [MESH.md](MESH.md). Mapping and
+  navigation with ROS 2: [ROS2.md](ROS2.md). Several robots: [FLEET.md](FLEET.md).
+
 ## Robotics Engineer
 
 Use this path if you want to run and inspect pipeline behavior quickly.

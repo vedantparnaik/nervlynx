@@ -50,21 +50,24 @@
 Phase 1 (Raspberry Pi 4/5) and most of phase 2 are in:
 - [x] Core install is PyYAML + Typer; ZMQ and Cap'n Proto are extras (nothing to compile on a Zero 2 W).
 - [x] `hardware.backend: auto` (gpiozero/lgpio on any Pi including the Pi 5, mock elsewhere).
-- [x] `nervlynx doctor`, `scan`, `new` (obstacle-avoider, teleop), `validate`, `sim`, `run`, `deploy`, `logs`, `pull`.
+- [x] `nervlynx doctor`, `scan`, `new` (obstacle-avoider, teleop, follow-me), `validate`, `sim`, `run`, `deploy`, `logs`, `pull`, `fleet`, `models`.
 - [x] `@node` functions in `nodes/*.py`; stale inputs pause the node; `only: sim|robot` for one config in both places.
 - [x] 2D sim world with ultrasonic-style range sensors and collisions; dashboard world view, touch joystick, camera streams.
 - [x] L298N, HC-SR04, MPU6050, and camera (picamera2/OpenCV) nodes with mock twins; latest-value topics and a bounded inbox.
 
 Next, in board order:
-- [x] Lazy `robot_core` exports: `import nervlynx` loads 5 modules instead of 31 (about 5x faster start-up).
+- [x] Lazy `robot_core` exports: `import nervlynx` loads 5 modules instead of 31 (about 5x faster start-up); built-in drivers load only when a config uses them.
 - [ ] Zero 2 W as a first-class target: memory budget, low-res camera profile, self-hosted Pi CI runners.
-- [ ] Calibration wizard in the dashboard (motor direction, IMU orientation, servo limits); PCA9685 servos; GPS; RPLidar/LD19 driver with a scan view.
+- [x] Calibration wizard in the dashboard (motor direction, IMU orientation, servo limits) saving per-robot `calibration.yaml`; PCA9685 servos; NMEA GPS; LD19/LD06 and RPLidar with a scan view and a simulated LiDAR; wheel odometry.
 - [x] ESP32 link host side: `esp32_link` node, Link v1 JSON-lines protocol, simulated board (`docs/ESP32_LINK.md`).
 - [ ] ESP32 firmware tested on hardware (sketch in `firmware/esp32_link/`), browser flashing, wheel PID on the board, Pico build.
-- [ ] Device mesh over Zenoh (laptop, Pi, ESP32 via zenoh-pico, Orin) with `placement:` for nodes.
-- [ ] Orin NX: detector node (CPU, Hailo, TensorRT backends), follow-me template, ROS 2 bridge for SLAM/Nav2.
-- [ ] Voice/LLM agents that call named skills, gated by the same safety layers.
-- [ ] Teams: fleet deploys with rollback, per-robot overlays, a flashable SD image, remote access.
+- [x] Device mesh with `devices:` and `placement:` over UDP or Zenoh: topic forwarding, camera frames, a robot-wide e-stop, signed messages (`docs/MESH.md`).
+- [ ] ESP32 on the mesh (zenoh-pico or the UDP wire format).
+- [x] Detector node (ONNX Runtime CPU, Hailo, TensorRT, OpenCV engines; YOLOX models by name), simulated cameras and people, follow-me template, ROS 2 bridge for SLAM/Nav2 (`docs/ROS2.md`).
+- [ ] Run the Hailo and TensorRT engines and slam_toolbox/Nav2 through the bridge on real hardware.
+- [x] Skills, a plain-language/LLM agent that can only call them, dashboard Talk panel, and on-robot voice, all behind the same safety layers (`docs/AGENTS.md`).
+- [x] Teams: `nervlynx fleet` deploys with health checks and automatic rollback, per-robot overlays, over-the-air upgrades, a Pi installer, an SD image workflow, and remote access over Tailscale (`docs/FLEET.md`).
+- [ ] First hardware pass of every driver on a Pi 5 (all of them are tested against stand-ins for their libraries so far).
 
 ## Good first issues
 

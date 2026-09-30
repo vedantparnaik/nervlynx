@@ -39,14 +39,14 @@ if the robot hits anything, which makes a good test.
 
 ## Put it on a Raspberry Pi
 
-On the Pi (Raspberry Pi OS Bookworm; Pi 5, Pi 4, and Zero 2 W):
+On the Pi (Raspberry Pi OS Bookworm; Pi 5, Pi 4, and Zero 2 W), one command installs the
+GPIO, I2C, and camera libraries, a virtualenv that can use them, and NervLynx, then runs
+`nervlynx doctor` (details and options in [deploy/pi/README.md](deploy/pi/README.md); a
+ready-made SD card image is built by the `pi-image` workflow):
 
 ```bash
-sudo apt install -y git python3-venv python3-gpiozero python3-lgpio python3-smbus2 python3-picamera2
-python3 -m venv --system-site-packages ~/.venv        # lets the venv use those apt packages
-~/.venv/bin/pip install "git+https://github.com/vedantparnaik/nervlynx"
-~/.venv/bin/nervlynx doctor                           # GPIO, I2C, camera, power, permissions
-~/.venv/bin/nervlynx scan                             # finds sensors and suggests nodes
+curl -fsSL https://raw.githubusercontent.com/vedantparnaik/nervlynx/main/deploy/pi/install.sh | bash
+nervlynx scan                    # finds sensors and suggests nodes
 ```
 
 Wire it as the project's `README.md` shows, then from your laptop:
@@ -62,7 +62,28 @@ dashboard is at `http://my-rover.local:9120/` from your phone. `nervlynx logs` f
 
 The same `robot.yaml` runs in both places: `hardware.backend: auto` uses real pins on the
 Pi and mock pins elsewhere, and nodes marked `only: sim` or `only: robot` (the simulated
-room, the real distance sensor) run only where they belong.
+room, the real distance sensor) run only where they belong. The dashboard's **Calibrate**
+section fixes a motor that turns backwards, the IMU's mounting, and servo limits, and
+saves them for that robot in `calibration.yaml`.
+
+## Grow it
+
+- **Follow a person**: `nervlynx new buddy --template follow-me` uses a camera and the
+  `detector` node (YOLOX on the CPU, Hailo on a Pi AI HAT+, TensorRT on an Orin NX); the
+  simulator has a person to follow.
+- **Talk to it**: add the `skills` and `agent` nodes and type or say "turn left and drive
+  forward one metre", offline or through any OpenAI-compatible LLM that can only call
+  bounded skills ([docs/AGENTS.md](docs/AGENTS.md)).
+- **More hardware**: PCA9685 servos, NMEA GPS, LD19/RPLidar LiDAR with a scan view, wheel
+  odometry, and an ESP32 motor controller, each with a simulated twin.
+- **Several computers, one robot**: place heavy nodes on an Orin or a laptop and the mesh
+  carries topics, camera frames, and a robot-wide e-stop between them
+  ([docs/MESH.md](docs/MESH.md)).
+- **ROS 2 when you need it**: the `ros2_bridge` node feeds slam_toolbox, Nav2, and RViz and
+  takes `/cmd_vel` back through the same safety layers ([docs/ROS2.md](docs/ROS2.md)).
+- **Many robots**: `nervlynx fleet deploy` updates every robot with its own overlay,
+  health-checks each one, and rolls back any that come up unhealthy
+  ([docs/FLEET.md](docs/FLEET.md)).
 
 ## Demo
 
@@ -70,12 +91,14 @@ room, the real distance sensor) run only where they belong.
 
 ## Why NervLynx
 
-- **Beginner-first CLI**: `nervlynx new / sim / validate / doctor / scan / deploy / run`, with a plain-English fix for every setup problem it finds
+- **Beginner-first CLI**: `nervlynx new / sim / validate / doctor / scan / deploy / run / fleet / models`, with a plain-English fix for every setup problem it finds
 - **Nodes are functions**: `@node` in `nodes/*.py`, no packaging; stale sensor data pauses the node so the drive deadman stops the robot
 - **Simulate before you solder**: a 2D world with obstacles, ultrasonic-style range sensors, collisions, and a live top-down view
 - **Live robot runtime**: run graphs continuously with fixed-rate control loops, a live dashboard with a touch joystick and camera streams, and a trace plus report for every session
 - **Safety by default**: drive deadman, latched e-stop, liveness watchdog, per-node circuit breakers, and a stall guard that stops actuators if the executor hangs
-- **Hardware ready**: gpiozero/lgpio (works on the Pi 5), L298N, TB6612, and BTS7960 motor drivers, HC-SR04 and MPU6050 sensors, Pi and USB cameras, each with a mock twin for laptops and CI
+- **Hardware ready**: gpiozero/lgpio (works on the Pi 5), L298N, TB6612, and BTS7960 motor drivers, HC-SR04, MPU6050, GPS, and LiDAR sensors, PCA9685 servos, wheel odometry, Pi and USB cameras, and an ESP32 link, each with a mock twin for laptops and CI
+- **Perception and agents**: an object detector on CPU, Hailo, or TensorRT; skills that people, voice, and LLMs can call without ever bypassing the safety layers
+- **Beyond one board**: a device mesh over UDP or Zenoh, a ROS 2 bridge, and fleet deploys with automatic rollback
 - **Structured runtime**: deterministic and async execution modes with priority scheduling
 - **Traceable dataflow**: envelope metadata (`topic`, `source`, `sequence`, `timestamp`, `schema`, `trace_id`)
 - **Operational safety**: watchdog liveness checks, backpressure detection, startup dependency supervision, checkpoint recovery
