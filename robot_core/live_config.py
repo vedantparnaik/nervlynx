@@ -11,6 +11,7 @@ import yaml
 from robot_core.camera import CameraNode
 from robot_core.drive import SkidSteerDrive
 from robot_core.hardware import BACKENDS
+from robot_core.link import Esp32Link
 from robot_core.live import ESTOP_TOPIC, LiveNode, LiveRuntime, PluginNodeAdapter, SensorSourceNode
 from robot_core.metrics import MetricsRegistry
 from robot_core.plugins import PluginRegistry
@@ -25,6 +26,7 @@ LIVE_BUILTINS: dict[str, Callable[..., LiveNode]] = {
   "hcsr04_range": HCSR04Range,
   "mpu6050_imu": MPU6050Imu,
   "camera": CameraNode,
+  "esp32_link": Esp32Link,
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes"}
