@@ -32,6 +32,8 @@ _RUNTIME_KEYS = {
   "breaker",
   "topic_priority",
   "seed",
+  "latest_topics",
+  "max_inbox_size",
 }
 _SAFETY_KEYS = {"stale_after_s", "estop_on_stale", "start_in_estop"}
 _HARDWARE_KEYS = {"backend"}
@@ -112,7 +114,7 @@ def validate_live_config(
   runtime = _section(cfg, "runtime")
   if runtime.get("clock", "system") not in ("system", "simulated"):
     issues.append("runtime.clock must be 'system' or 'simulated'")
-  for key in ("max_queue_size", "max_hops_per_step"):
+  for key in ("max_queue_size", "max_hops_per_step", "max_inbox_size"):
     if key in runtime and (not isinstance(runtime[key], int) or isinstance(runtime[key], bool) or runtime[key] < 1):
       issues.append(f"runtime.{key} must be a positive integer")
   for key in ("stall_timeout_s", "max_idle_sleep_s"):
@@ -130,6 +132,9 @@ def validate_live_config(
       issues.append("runtime.breaker.threshold must be an integer >= 0 (0 disables the breaker)")
     if "cooldown_s" in breaker and (not _is_number(breaker["cooldown_s"]) or breaker["cooldown_s"] <= 0):
       issues.append("runtime.breaker.cooldown_s must be a positive number")
+  latest = runtime.get("latest_topics", [])
+  if not isinstance(latest, list) or not all(_is_name(t) for t in latest):
+    issues.append("runtime.latest_topics must be a list of topic names")
   priority = runtime.get("topic_priority", {})
   if not isinstance(priority, dict) or not all(_is_name(k) and isinstance(v, int) and not isinstance(v, bool) for k, v in priority.items()):
     issues.append("runtime.topic_priority must map topic names to integers")
@@ -257,6 +262,8 @@ def build_live_runtime(
     stall_timeout_s=runtime_cfg.get("stall_timeout_s", 0.5),
     max_idle_sleep_s=float(runtime_cfg.get("max_idle_sleep_s", 0.05)),
     seed=seed,
+    latest_topics=runtime_cfg.get("latest_topics") or (),
+    max_inbox_size=int(runtime_cfg.get("max_inbox_size", 4096)),
   )
   for node_cfg in cfg["nodes"]:
     plugin = node_cfg["plugin"]

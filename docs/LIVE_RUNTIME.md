@@ -97,6 +97,8 @@ runtime:
   max_idle_sleep_s: 0.05       # longest the executor sleeps between steps
   breaker: {threshold: 5, cooldown_s: 2.0}   # threshold 0 disables breakers
   topic_priority: {safety.estop: 0}          # lower value dispatches first (default 100)
+  latest_topics: [range.front, camera.frame] # deliver only the newest pending message
+  max_inbox_size: 4096         # messages waiting from other threads; extra ones are dropped
   seed: 7                      # trace-ID seed (defaults to 0 on a simulated clock)
 
 safety:

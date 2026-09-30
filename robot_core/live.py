@@ -192,6 +192,7 @@ class _Slot:
 class _TopicStats:
   count: int = 0
   dropped: int = 0
+  conflated: int = 0
   recent: deque = field(default_factory=lambda: deque(maxlen=256))
   latency: Histogram | None = None
   published_counters: dict[str, Counter] = field(default_factory=dict)
@@ -279,7 +280,12 @@ class LiveRuntime(PipelineRuntime):
     max_idle_sleep_s: float = 0.05,
     fault_history: int = 512,
     seed: int | None = None,
+    latest_topics: Iterable[str] = (),
+    max_inbox_size: int = 4096,
   ) -> None:
+    """`latest_topics` deliver only their newest pending message (sensor readings, frames);
+    other topics queue every message. `max_inbox_size` bounds messages waiting from other
+    threads; beyond it `publish_external` drops them (e-stop requests are never dropped)."""
     super().__init__(max_queue_size=max_queue_size, topic_priority=topic_priority, clock=clock or SystemClock())
     self.name = name
     self.metrics = metrics if metrics is not None else MetricsRegistry()
@@ -310,6 +316,14 @@ class LiveRuntime(PipelineRuntime):
     self._rng = random.Random(seed if seed is not None else random.SystemRandom().getrandbits(64))
     self._inbox: deque[tuple[str, Any]] = deque()
     self._inbox_lock = threading.Lock()
+    self._latest_topics = frozenset(latest_topics)
+    self._latest_enqueued: dict[str, int] = {}
+    self._inbox_latest: dict[str, tuple[str, str, dict[str, Any], str]] = {}
+    self._inbox_msgs = 0
+    self._max_inbox = max_inbox_size
+    self._inbox_conflated: dict[str, int] = {}
+    self._inbox_overflow: dict[str, int] = {}
+    self._conflated = 0
     self._wake = threading.Event()
     self._state_lock = threading.RLock()
     self._estop = False
@@ -417,11 +431,25 @@ class LiveRuntime(PipelineRuntime):
 
   # ------------------------------------------------------------------ thread-safe control
 
-  def publish_external(self, topic: str, schema: str, payload: dict[str, Any], *, source: str = "external") -> None:
-    """Queue a message from another thread; it is published at the start of the next step."""
+  def publish_external(self, topic: str, schema: str, payload: dict[str, Any], *, source: str = "external") -> bool:
+    """Queue a message from another thread; it is published at the start of the next step.
+
+    Returns False when the inbox is full and the message was dropped.
+    """
+    item = (topic, schema, dict(payload), source)
     with self._inbox_lock:
-      self._inbox.append(("msg", (topic, schema, dict(payload), source)))
+      if topic in self._latest_topics:
+        if topic in self._inbox_latest:
+          self._inbox_conflated[topic] = self._inbox_conflated.get(topic, 0) + 1
+        self._inbox_latest[topic] = item
+      elif self._inbox_msgs >= self._max_inbox:
+        self._inbox_overflow[topic] = self._inbox_overflow.get(topic, 0) + 1
+        return False
+      else:
+        self._inbox.append(("msg", item))
+        self._inbox_msgs += 1
     self._wake.set()
+    return True
 
   def request_estop(self, reason: str = "operator request", *, source: str = "api") -> None:
     """Stop actuators immediately (from the calling thread) and latch the e-stop."""
@@ -516,7 +544,7 @@ class LiveRuntime(PipelineRuntime):
     return min(slot.next_tick_ns for slot in self._tick_slots)
 
   def next_wakeup_ns(self) -> int | None:
-    if self._queue or self._inbox:
+    if self._queue or self._inbox or self._inbox_latest:
       return self._clock.monotonic_ns()
     return self._next_tick_ns()
 
@@ -543,7 +571,7 @@ class LiveRuntime(PipelineRuntime):
           break
         if self._clock.simulated:
           wake = self._next_tick_ns()
-          if self._queue or self._inbox:
+          if self._queue or self._inbox or self._inbox_latest:
             # Only a hop-budget overflow leaves work queued; still advance so a message
             # loop cannot freeze simulated time.
             wake = now + 1_000_000 if wake is None else min(wake, now + 1_000_000)
@@ -623,15 +651,34 @@ class LiveRuntime(PipelineRuntime):
       )
       return msg
     self._enqueue_counter += 1
+    if topic in self._latest_topics:
+      self._latest_enqueued[topic] = self._enqueue_counter
     heapq.heappush(self._queue, (self._topic_priority.get(topic, 100), self._enqueue_counter, msg))
     if len(self._queue) > self._queue_depth_max:
       self._queue_depth_max = len(self._queue)
     return msg
 
+  def _count_conflated(self, topic: str, n: int) -> None:
+    self._topic_stats(topic).conflated += n
+    self._conflated += n
+    self.metrics.inc("nervlynx_messages_conflated_total", n, label_key({"topic": topic}))
+
   def _drain_inbox(self) -> None:
     with self._inbox_lock:
       items = list(self._inbox)
       self._inbox.clear()
+      self._inbox_msgs = 0
+      latest = list(self._inbox_latest.values())
+      self._inbox_latest.clear()
+      conflated, self._inbox_conflated = self._inbox_conflated, {}
+      overflow, self._inbox_overflow = self._inbox_overflow, {}
+    for topic, n in conflated.items():
+      self._count_conflated(topic, n)
+    for topic, n in overflow.items():
+      self._topic_stats(topic).dropped += n
+      self._dropped += n
+      self.metrics.inc("nervlynx_messages_dropped_total", n, label_key({"reason": "inbox_full", "topic": topic}))
+      self._record_fault("backpressure", f"inbox full: dropped {n} external message(s) on topic={topic}", dedupe_key=("inbox_full", topic))
     for kind, data in items:
       if kind == "msg":
         topic, schema, payload, source = data
@@ -641,6 +688,8 @@ class LiveRuntime(PipelineRuntime):
         self._engage_estop(reason, source=source)
       elif kind == "clear":
         self._clear_estop(source=data)
+    for topic, schema, payload, source in latest:
+      self._emit(source, topic, schema, payload, None)
 
   def _run_due_ticks(self, now: int) -> int:
     processed = 0
@@ -690,7 +739,11 @@ class LiveRuntime(PipelineRuntime):
           self._m_hops.inc()
           self._record_fault("hop_limit", "pipeline hop limit reached", dedupe_key="hop_limit")
         break
-      _, _, msg = heapq.heappop(self._queue)
+      _, counter, msg = heapq.heappop(self._queue)
+      topic = msg.envelope.topic
+      if topic in self._latest_topics and counter != self._latest_enqueued.get(topic):
+        self._count_conflated(topic, 1)
+        continue
       self._hops_left -= 1
       processed += 1
       for slot, handler in self._routes.get(msg.envelope.topic, ()):
@@ -888,6 +941,7 @@ class LiveRuntime(PipelineRuntime):
       ("nervlynx_messages_published_total", "Messages published, by topic and source."),
       ("nervlynx_messages_delivered_total", "Messages delivered to a node, by topic and node."),
       ("nervlynx_messages_dropped_total", "Messages not delivered, by topic and reason."),
+      ("nervlynx_messages_conflated_total", "Messages superseded by a newer one on a latest-value topic."),
       ("nervlynx_handler_seconds", "Time spent in node on_message handlers."),
       ("nervlynx_tick_seconds", "Time spent in node tick callbacks."),
       ("nervlynx_tick_lateness_seconds", "How late each tick started relative to its schedule."),
@@ -971,6 +1025,8 @@ class LiveRuntime(PipelineRuntime):
           "count": stats.count,
           "rate_hz": round(stats.rate_hz(now), 3),
           "dropped": stats.dropped,
+          "conflated": stats.conflated,
+          "latest_only": topic in self._latest_topics,
           "subscribers": [slot.name for slot, _ in self._routes.get(topic, ())],
           "last_source": stats.last_source,
           "latency_ms": _summary_ms(stats.latency),
@@ -1004,7 +1060,7 @@ class LiveRuntime(PipelineRuntime):
           "hop_limit_events": self._hop_limit_events,
           "stalls": self._stalls,
         },
-        "messages": {"published": self._published, "delivered": self._delivered, "dropped": self._dropped},
+        "messages": {"published": self._published, "delivered": self._delivered, "dropped": self._dropped, "conflated": self._conflated},
         "nodes": nodes,
         "topics": topics,
         "faults": faults,
