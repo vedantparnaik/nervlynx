@@ -162,7 +162,7 @@ Consumes drive commands, applies them to motors at `rate_hz`, and publishes `dri
 | Param | Default | Meaning |
 | --- | --- | --- |
 | `left`, `right` | required | Motor specs per side (any number of motors) |
-| `driver` | `bts7960` | `bts7960` (`rpwm`, `lpwm`, optional `enable_pins`) or `tb6612` (`in1`, `in2`, `pwm`, optional shared `stby`) |
+| `driver` | `bts7960` | `bts7960` (`rpwm`, `lpwm`, optional `enable_pins`), `tb6612` (`in1`, `in2`, `pwm`, optional shared `stby`), or `l298n` (`in1`, `in2`, plus `en` for PWM on ENA/ENB; leave `en` out when the EN jumper is fitted and IN1/IN2 carry the PWM) |
 | `backend` | `mock` | `mock`, `rpi_gpio`, `gpiozero`, or `auto` (or `hardware.backend` / `--backend`); `auto` reports what it chose as an info fault and in `/stats` |
 | `pwm_frequency_hz` | 1000 | PWM carrier frequency |
 | `deadman_s` | 0.25 | Stop when no command has arrived for this long |
@@ -222,6 +222,33 @@ and capped at `max_range_m` (`hit` is false when nothing is in range). Walls and
 stop the robot: it stalls at the contact point, each new contact counts as a collision
 (`nervlynx_sim_collisions_total`, a `sim_collision` fault, and `collisions` in `/stats`),
 and it counts again only after it has moved 1 cm clear.
+
+### `hcsr04_range`
+
+HC-SR04 ultrasonic ranger, read through gpiozero's `DistanceSensor` (which times the echo
+on its own thread, so the executor never blocks). Publishes the same payload as the
+simulator on `range.<name>` at 15 Hz by default.
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `trigger`, `echo` | required | BCM pins. **The echo pin outputs 5 V**: use a divider (1 kΩ + 2 kΩ) into the Pi |
+| `name` / `topic` | `front` / `range.<name>` | Output topic |
+| `max_range_m` | 2.0 | Readings are capped here; `hit` is false at the cap |
+| `backend` | `mock` | `gpiozero` or `auto` on the robot; mock publishes `mock_distance_m` (default: nothing in range) |
+
+### `mpu6050_imu`
+
+MPU6050-family IMU (MPU6050, MPU6500, MPU9250 accel and gyro) over I2C with `smbus2`.
+Publishes `{"accel_mps2": [x, y, z], "gyro_dps": [x, y, z], "temp_c"}` on `imu` at 50 Hz.
+It checks the chip's WHO_AM_I register at start-up, and averages `calibrate_samples` (100)
+gyro readings to remove bias, so keep the robot still while it starts. I2C failures become
+a fault that says how to check the wiring (`i2cdetect -y 1`).
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `bus` / `address` | 1 / `0x68` | `0x69` when AD0 is pulled high |
+| `accel_range_g` / `gyro_range_dps` | 2 / 250 | Full-scale ranges |
+| `backend` | `mock` | Any real backend (e.g. `auto`) uses the I2C bus; mock reports 1 g on z and zero rotation |
 
 ## Safety model
 
