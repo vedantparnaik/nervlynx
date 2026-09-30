@@ -1,0 +1,55 @@
+name: pi-image
+
+# A flashable Raspberry Pi OS Lite (64-bit) image with NervLynx installed, built with pi-gen.
+# Run it from the Actions tab, or push a v* tag to attach the image to the release.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: NervLynx branch, tag, or commit to install in the image
+        default: main
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Stage the installer
+        run: |
+          cp deploy/pi/install.sh deploy/pi/pi-gen/stage-nervlynx/00-install/files/install.sh
+          echo "${{ github.event.inputs.ref || github.ref_name }}" > deploy/pi/pi-gen/stage-nervlynx/00-install/files/ref
+          chmod +x deploy/pi/pi-gen/stage-nervlynx/00-install/*.sh deploy/pi/pi-gen/stage-nervlynx/prerun.sh
+      - name: Build the image
+        id: build
+        uses: usimd/pi-gen-action@v1
+        with:
+          image-name: nervlynx
+          pi-gen-version: arm64
+          release: bookworm
+          stage-list: stage0 stage1 stage2 ./deploy/pi/pi-gen/stage-nervlynx
+          export-last-stage-only: true
+          hostname: nervlynx
+          username: pi
+          # Replaced on first boot: set the user, Wi-Fi, and SSH in Raspberry Pi Imager's OS customisation.
+          password: nervlynx-first-boot
+          disable-first-boot-user-rename: 0
+          enable-ssh: 0
+          locale: en_US.UTF-8
+          timezone: Etc/UTC
+          compression: xz
+          increase-runner-disk-size: true
+      - uses: actions/upload-artifact@v6
+        with:
+          name: nervlynx-pi-image
+          path: ${{ steps.build.outputs.image-path }}
+          retention-days: 14
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" "${{ steps.build.outputs.image-path }}" --clobber

@@ -97,6 +97,19 @@ jobs:
       - name: Live rover simulation
         run: robot-core run-live examples/live/rover_sim.yaml --sim-time --duration-s 10 --run-dir logs/live/minimal --strict --quiet
 
+  pi-installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run the Raspberry Pi installer (on Ubuntu, so the Pi-only steps are skipped)
+        run: bash deploy/pi/install.sh --source . --no-interfaces
+      - name: The installed nervlynx creates and simulates a project
+        run: |
+          ~/.venv/bin/nervlynx new ci-rover --dir /tmp
+          cd /tmp/ci-rover && ~/.venv/bin/nervlynx sim --fast --duration-s 20 --strict --quiet
+      - name: Running it again upgrades in place
+        run: bash deploy/pi/install.sh --source . --no-interfaces
+
   ros2-bridge:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base
