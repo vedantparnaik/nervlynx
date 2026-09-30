@@ -33,7 +33,7 @@ def test_new_creates_a_named_project_and_protects_existing_folders(tmp_path: Pat
   bad_name = runner.invoke(app, ["new", "My Rover", "--dir", str(tmp_path)])
   assert bad_name.exit_code == 1 and "must start with a lowercase letter" in bad_name.stdout
   bad_template = runner.invoke(app, ["new", "x", "--template", "hovercraft", "--dir", str(tmp_path)])
-  assert bad_template.exit_code == 1 and "choose one of: obstacle-avoider, teleop" in bad_template.stdout
+  assert bad_template.exit_code == 1 and "choose one of: obstacle-avoider, teleop, follow-me" in bad_template.stdout
 
 
 def test_obstacle_avoider_template_validates_and_drives_a_minute_without_collisions(tmp_path: Path) -> None:
@@ -67,6 +67,20 @@ def test_teleop_template_simulates_cleanly(tmp_path: Path) -> None:
   assert runner.invoke(app, ["validate", str(root / "robot.yaml")]).exit_code == 0
   result = runner.invoke(app, ["sim", str(root / "robot.yaml"), "--fast", "--duration-s", "5", "--strict", "--quiet", "--run-dir", str(tmp_path / "run")])
   assert result.exit_code == 0, result.stdout
+
+
+def test_follow_me_template_keeps_a_walking_person_in_view(tmp_path: Path) -> None:
+  root = new_project(tmp_path, "buddy", "--template", "follow-me")
+  checked = runner.invoke(app, ["validate", str(root / "robot.yaml")])
+  assert checked.exit_code == 0 and "ok in sim and robot modes (5 nodes)" in checked.stdout
+  run_dir = tmp_path / "run"
+  result = runner.invoke(app, ["sim", str(root / "robot.yaml"), "--fast", "--duration-s", "120", "--strict", "--quiet", "--run-dir", str(run_dir)])
+  assert result.exit_code == 0, result.stdout
+  frames = [json.loads(line) for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+  views = [bool(m["payload"]["detections"]) for m in frames if m["topic"] == "detections.front"]
+  assert len(views) > 1000 and sum(views) / len(views) > 0.9
+  report = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
+  assert report["nodes"]["sim"]["status"]["collisions"] == 0 and "detector" not in report["nodes"]
 
 
 def test_commands_explain_a_missing_robot_yaml(tmp_path: Path, monkeypatch) -> None:

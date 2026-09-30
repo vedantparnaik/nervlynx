@@ -20,6 +20,7 @@ class Template:
 TEMPLATES: dict[str, Template] = {
   "obstacle-avoider": Template("obstacle-avoider", "drive forward, turn away from obstacles (HC-SR04 + L298N)"),
   "teleop": Template("teleop", "drive from the dashboard with W/A/S/D (L298N)"),
+  "follow-me": Template("follow-me", "follow a person with a camera and a person detector (L298N)"),
 }
 DEFAULT_TEMPLATE = "obstacle-avoider"
 

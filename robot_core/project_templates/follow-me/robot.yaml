@@ -1,0 +1,61 @@
+name: __PROJECT_NAME__
+description: >
+  Follows the nearest person it sees, keeping them centred and a few steps away.
+  Try it in the simulator:  nervlynx sim   (then open http://127.0.0.1:9120/)
+  On the Raspberry Pi:      nervlynx run   (needs a camera and pip install "nervlynx[ai]")
+
+runtime:
+  latest_topics: [detections.front]   # always steer on the newest detection
+
+safety:
+  stale_after_s: 0.5
+
+hardware:
+  backend: auto                  # real pins on a Raspberry Pi, mock pins everywhere else
+
+nodes:
+  # Your code: nodes/follow.py. Change the settings here or in the function.
+  - plugin: follow
+    params: {target_height: 0.6, cruise: 0.5}
+
+  # Two DC motors on an L298N. Pins are BCM numbers; see README.md for the wiring.
+  - name: drive
+    plugin: skid_steer_drive
+    rate_hz: 50
+    critical: true
+    params:
+      driver: l298n
+      max_speed: 0.6             # raise once the robot behaves
+      deadman_s: 0.3             # motors stop if commands stop
+      left:
+        - {name: left, in1: 5, in2: 6, en: 12}
+      right:
+        - {name: right, in1: 20, in2: 21, en: 13}
+
+  # The real camera and person detector, only on the robot. To run the detector on
+  # another computer (an Orin NX, a laptop), see docs/MESH.md.
+  - name: camera
+    plugin: camera
+    only: robot
+    params: {name: front, width: 640, height: 480, fps: 15}
+  - name: detector
+    plugin: detector
+    only: robot
+    params: {camera: front, labels: [person], max_fps: 10}
+
+  # The simulated robot, room, and a person walking laps, only in `nervlynx sim`.
+  - name: sim
+    plugin: skid_steer_sim
+    only: sim
+    rate_hz: 50
+    params:
+      world:
+        width_m: 8.0
+        height_m: 6.0
+        targets:
+          - label: person
+            path: [[3.0, 1.2], [6.8, 1.2], [6.8, 4.8], [1.2, 4.8], [1.2, 1.2]]
+            speed_mps: 0.25
+      start: [1.6, 3.0, -60.0]
+      cameras:
+        - {name: front, fov_deg: 62}   # about a Pi Camera Module 3's view
