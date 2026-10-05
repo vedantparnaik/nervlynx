@@ -101,7 +101,9 @@ echo "4. normal stop"
 sleep 15
 systemctl --user stop "$unit"
 [ "$(prop Result)" = success ] || fail "the stop was not clean: $(prop Result)"
-[ "$(prop NRestarts)" = 2 ] || fail "the service restarted after a normal stop"
+logged "run_live_done" || fail "the run did not finish normally"
 ls "$project"/logs/live/ci-watchdog-*/report.json > /dev/null || fail "no run report after a normal stop"
+sleep 5
+[ "$(prop ActiveState)" = inactive ] || fail "the service started again after a normal stop"
 
 echo "systemd watchdog: all checks passed"
