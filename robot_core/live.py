@@ -921,17 +921,21 @@ class LiveRuntime(PipelineRuntime):
     return True
 
   def _hard_stop_all(self) -> None:
+    failed: list[tuple[str, Exception]] = []
     for slot in list(self._slots.values()):
       try:
         slot.node.hard_stop()
       except Exception as exc:  # pragma: no cover - defensive, hardware specific
-        self._record_fault("hard_stop_failed", f"node {slot.name} hard_stop raised {exc!r}", node=slot.name, severity="critical")
+        failed.append((slot.name, exc))
+    for name, exc in failed:
+      self._record_fault("hard_stop_failed", f"node {name} hard_stop raised {exc!r}", node=name, severity="critical")
 
   def _on_stall(self, age_ns: int) -> None:
+    # Stop first: recording the fault runs listeners, which may be slow.
+    self.request_estop(f"executor stalled for {age_ns / 1e9:.3f}s", source="stall_guard")
     self._stalls += 1
     self.metrics.inc("nervlynx_executor_stalls_total")
     self._record_fault("stall", f"executor stalled for {age_ns / 1e9:.3f}s; actuators hard-stopped", severity="critical")
-    self.request_estop(f"executor stalled for {age_ns / 1e9:.3f}s", source="stall_guard")
 
   def _call_quietly(self, slot: _Slot, method: str) -> None:
     try:

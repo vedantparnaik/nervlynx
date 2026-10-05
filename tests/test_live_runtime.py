@@ -311,6 +311,35 @@ def test_stall_guard_hard_stops_actuators_when_the_executor_blocks() -> None:
   assert "stall" in {f["kind"] for f in snap["faults"]}
 
 
+def test_stall_guard_stops_actuators_before_it_records_the_fault() -> None:
+  stopped, release = threading.Event(), threading.Event()
+  stopped_when_logged: list[bool] = []
+
+  class Motor(LiveNode):
+    def hard_stop(self):
+      stopped.set()
+
+  class Hang(LiveNode):
+    def __init__(self) -> None:
+      self.ticks = 0
+
+    def tick(self, ctx):
+      self.ticks += 1
+      if self.ticks == 3:
+        release.wait(2.0)
+
+  rt = LiveRuntime(stall_timeout_s=0.1)
+  rt.add_node("motor", Motor())
+  rt.add_node("hang", Hang(), rate_hz=50)
+  rt.add_fault_listener(lambda event: stopped_when_logged.append(stopped.is_set()) if event.kind == "stall" else None)
+  worker = threading.Thread(target=rt.run, kwargs={"duration_s": 0.5})
+  worker.start()
+  assert stopped.wait(2.0)
+  release.set()
+  worker.join(timeout=3.0)
+  assert stopped_when_logged == [True]
+
+
 def test_lifecycle_order_and_setup_failure_rollback() -> None:
   log: list[str] = []
   rt = sim_runtime()
