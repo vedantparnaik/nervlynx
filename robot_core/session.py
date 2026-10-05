@@ -21,6 +21,7 @@ from robot_core.overlay import overlay_paths
 from robot_core.project import load_project
 from robot_core.report import FaultLog, TraceRecorder, build_report, render_markdown
 from robot_core.server import serve_live
+from robot_core.systemd import DEFAULT_TIMEOUT_S, start_systemd_watchdog
 
 STRICT_FAULT_KINDS = ("node_error", "watchdog", "stall", "estop", "setup_failed")
 
@@ -129,6 +130,9 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
       previous[sig] = signal.signal(sig, lambda *_: runtime.stop())
     except ValueError:  # not on the main thread
       pass
+  watchdog = start_systemd_watchdog(runtime, (cfg.get("runtime") or {}).get("systemd_watchdog_s", DEFAULT_TIMEOUT_S))
+  if watchdog is not None and watchdog.timeout_s:
+    echo(f"systemd_watchdog={watchdog.timeout_s:g}s")
   where = f" device={device}" if device else ""
   echo(f"run_live_started graph={runtime.name} mode={opts.mode}{where} clock={'simulated' if clock.simulated else 'system'} run_dir={out_dir}")
   wall_started = time.time()
@@ -139,6 +143,8 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
     echo(f"run_live_error: {exc}")
     exit_code = 1
   finally:
+    if watchdog is not None:
+      watchdog.stop()
     for sig, handler in previous.items():
       signal.signal(sig, handler)
     if server is not None:

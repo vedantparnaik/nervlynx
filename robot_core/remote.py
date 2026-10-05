@@ -78,7 +78,10 @@ def service_unit(target: Target) -> str:
     "KillSignal=SIGINT\n"
     "TimeoutStopSec=10\n"
     "Restart=on-failure\n"
-    "RestartSec=3\n\n"
+    "RestartSec=3\n"
+    "# Lets NervLynx arm a watchdog once it runs; systemd restarts it if it then freezes.\n"
+    "NotifyAccess=main\n"
+    "TimeoutAbortSec=5\n\n"
     "[Install]\n"
     "WantedBy=default.target\n"
   )

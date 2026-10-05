@@ -110,6 +110,25 @@ jobs:
       - name: Running it again upgrades in place
         run: bash deploy/pi/install.sh --source . --no-interfaces
 
+  systemd-watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install .
+      - name: Start a systemd user manager, as on a robot with lingering enabled
+        run: |
+          sudo loginctl enable-linger "$USER"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          for _ in $(seq 30); do [ -S "/run/user/$(id -u)/bus" ] && break; sleep 1; done
+      - name: Frozen robots restart, healthy ones do not
+        run: bash deploy/systemd/check_watchdog.sh
+
   ros2-bridge:
     runs-on: ubuntu-latest
     container: ros:humble-ros-base

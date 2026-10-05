@@ -14,6 +14,9 @@ KillSignal=SIGINT
 TimeoutStopSec=10
 Restart=on-failure
 RestartSec=2
+# Lets NervLynx arm a watchdog once it runs; systemd restarts it if it then freezes.
+NotifyAccess=main
+TimeoutAbortSec=5
 User=nervlynx
 Group=nervlynx
 SupplementaryGroups=gpio

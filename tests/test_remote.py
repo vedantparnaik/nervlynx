@@ -47,6 +47,7 @@ def test_service_unit_survives_shell_quoting() -> None:
   assert "WorkingDirectory=%h/nervlynx-projects/it's-mine" in unit
   assert "ExecStart=/bin/sh -lc 'exec nervlynx run robot.yaml --quiet --control'" in unit
   assert "KillSignal=SIGINT" in unit
+  assert "NotifyAccess=main" in unit and "TimeoutAbortSec=5" in unit
   assert shlex.split(f"printf %s {shlex.quote(unit)}")[2] == unit
 
 

@@ -387,6 +387,19 @@ class LiveRuntime(PipelineRuntime):
     return self._started
 
   @property
+  def stopping(self) -> bool:
+    """True once `stop()` was called or shutdown has begun."""
+    return self._stop_requested or self._stopped
+
+  @property
+  def steps(self) -> int:
+    return self._steps
+
+  def last_step_age_s(self) -> float:
+    """Wall-clock seconds since the executor last completed a step (safe from any thread)."""
+    return (time.monotonic_ns() - self._last_step_wall_ns) / 1e9
+
+  @property
   def nodes(self) -> dict[str, LiveNode]:
     return {name: slot.node for name, slot in self._slots.items()}
 

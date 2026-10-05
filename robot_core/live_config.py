@@ -47,6 +47,7 @@ _RUNTIME_KEYS = {
   "seed",
   "latest_topics",
   "max_inbox_size",
+  "systemd_watchdog_s",
 }
 _SAFETY_KEYS = {"stale_after_s", "estop_on_stale", "start_in_estop"}
 _HARDWARE_KEYS = {"backend"}
@@ -157,6 +158,8 @@ def validate_live_config(
   for key in ("stall_timeout_s", "max_idle_sleep_s"):
     if key in runtime and runtime[key] is not None and (not _is_number(runtime[key]) or runtime[key] <= 0):
       issues.append(f"runtime.{key} must be a positive number")
+  if runtime.get("systemd_watchdog_s") is not None and (not _is_number(runtime["systemd_watchdog_s"]) or runtime["systemd_watchdog_s"] < 1):
+    issues.append("runtime.systemd_watchdog_s must be at least 1 (seconds), or null to turn it off")
   if "seed" in runtime and (not isinstance(runtime["seed"], int) or isinstance(runtime["seed"], bool)):
     issues.append("runtime.seed must be an integer")
   breaker = runtime.get("breaker", {})
