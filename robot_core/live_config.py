@@ -32,6 +32,7 @@ LIVE_BUILTINS: dict[str, str] = {
   "agent": "robot_core.agent:Agent",
   "voice": "robot_core.voice:Voice",
   "wheel_odometry": "robot_core.odometry:WheelOdometry",
+  "heartbeat": "robot_core.heartbeat:Heartbeat",
 }
 
 _TOP_LEVEL_KEYS = {"name", "description", "runtime", "safety", "hardware", "nodes", "devices", "mesh"}
@@ -202,6 +203,8 @@ def validate_live_config(
     issues.append(f"no nodes run in {mode} mode")
     return issues
 
+  devices = list(cfg["devices"]) if isinstance(cfg.get("devices"), dict) else []
+  pin_claims: list[tuple[str, str, Any, Any, dict[int, str]]] = []
   seen: set[str] = set()
   for idx, node_cfg in enumerate(nodes):
     prefix = f"nodes[{idx}]"
@@ -252,6 +255,10 @@ def validate_live_config(
         effective_topics = topics if topics is not None else list(getattr(instance, "input_topics", ()) or ())
         if rate is None and getattr(instance, "rate_hz", None) is None and not effective_topics:
           issues.append(f"{prefix}: has no input_topics and no rate_hz, so it would never run")
+        pins = instance.gpio_pins() if callable(getattr(instance, "gpio_pins", None)) else {}
+        if pins:
+          device = node_cfg.get("placement") or (devices[0] if devices else None)
+          pin_claims.append((prefix, name, node_cfg.get("only"), device, pins))
     elif registry.has_node(plugin):
       if params:
         issues.append(f"{prefix}: params are only supported for live node plugins")
@@ -267,6 +274,18 @@ def validate_live_config(
         issues.append(f"{prefix}.schema must be a non-empty string")
     else:
       issues.append(f"{prefix}.plugin not found in registry: {plugin}")
+  return issues + _pin_conflicts(pin_claims)
+
+
+def _pin_conflicts(claims: list[tuple[str, str, Any, Any, dict[int, str]]]) -> list[str]:
+  """Pins claimed by two nodes that would run at the same time on the same computer."""
+  issues: list[str] = []
+  for idx, (prefix, _, only, device, pins) in enumerate(claims):
+    for _, other, other_only, other_device, other_pins in claims[:idx]:
+      if device != other_device or (only and other_only and only != other_only):
+        continue
+      for pin in sorted(set(pins) & set(other_pins)):
+        issues.append(f"{prefix}: pin {pin} ({pins[pin]}) is already used by {other} ({other_pins[pin]})")
   return issues
 
 

@@ -21,7 +21,7 @@ import threading
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Iterable
 
-from robot_core.hardware import BACKENDS, DRIVERS, Motor, PinBackend, build_motor, create_backend, validate_motor_specs
+from robot_core.hardware import BACKENDS, DRIVERS, Motor, PinBackend, build_motor, create_backend, motor_pins, validate_motor_specs
 from robot_core.live import LiveNode, NodeContext, Output
 from robot_core.metrics import label_key
 from robot_core.runtime import RuntimeMessage
@@ -368,6 +368,9 @@ class SkidSteerDrive(LiveNode):
       "hard_stopped": self._hard_stopped,
       "testing": self._test["label"] if self._test is not None else None,
     }
+
+  def gpio_pins(self) -> dict[int, str]:
+    return motor_pins(self.driver, self.left_specs + self.right_specs)
 
   # ------------------------------------------------------------------ calibration
 

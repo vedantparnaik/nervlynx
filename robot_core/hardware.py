@@ -460,6 +460,21 @@ def validate_motor_specs(driver: str, specs: Iterable[dict[str, Any]]) -> list[s
   return issues
 
 
+def motor_pins(driver: str, specs: Iterable[dict[str, Any]]) -> dict[int, str]:
+  """Every pin that valid motor specs use, mapped to what it drives."""
+  pins: dict[int, str] = {}
+  for spec in specs:
+    name = str(spec.get("name", "motor"))
+    for field in (*_REQUIRED_PINS[driver], "en"):
+      if spec.get(field) is not None:
+        pins[int(spec[field])] = f"{name}.{field}"
+    if spec.get("stby") is not None:
+      pins[int(spec["stby"])] = "stby"
+    for pin in spec.get("enable_pins") or ():
+      pins[int(pin)] = "enable"
+  return pins
+
+
 def build_motor(backend: PinBackend, driver: str, spec: dict[str, Any], *, frequency_hz: float = 1000.0) -> Motor:
   name = str(spec.get("name", "motor"))
   invert = bool(spec.get("invert", False))

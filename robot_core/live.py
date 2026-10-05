@@ -90,6 +90,13 @@ class LiveNode:
     """Extra state surfaced in `/stats` and run reports."""
     return {}
 
+  def gpio_pins(self) -> dict[int, str]:
+    """BCM pins this node uses, each mapped to what it is for.
+
+    Validation rejects two nodes that would run on the same computer and claim one pin.
+    """
+    return {}
+
   def calibrate(self, action: str, args: dict[str, Any], ctx: NodeContext) -> dict[str, Any]:
     """One step of the dashboard's calibration wizard, run on the executor thread.
 

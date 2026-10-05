@@ -132,6 +132,9 @@ class HCSR04Range(LiveNode):
   def status(self) -> dict[str, Any]:
     return {"distance_m": self.distance_m, "backend": self.resolved_backend or self.backend_name, "pins": {"trigger": self.trigger, "echo": self.echo}}
 
+  def gpio_pins(self) -> dict[int, str]:
+    return {self.trigger: "trigger", self.echo: "echo"}
+
 
 _WHO_AM_I = {0x68: "MPU6050", 0x70: "MPU6500", 0x71: "MPU9250", 0x73: "MPU9255"}
 _ACCEL_RANGES_G = {2: 0, 4: 1, 8: 2, 16: 3}
