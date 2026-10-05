@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import platform
 import threading
+import time
+from collections import deque
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Iterable, TextIO
+from typing import Any, Iterable
 
 from robot_core.live import FaultEvent, LiveRuntime
 from robot_core.recorder import encode_message
@@ -21,8 +23,130 @@ def package_version() -> str:
     return "nervlynx-unknown"
 
 
+class LineWriter:
+  """Appends lines to a file from its own thread, so a slow SD card never blocks the caller.
+
+  Callers only queue lines. Once `max_buffer_bytes` are waiting, a new line is dropped and
+  counted, or with `block_when_full` the caller waits for room: simulated time has no
+  deadline to miss, and its traces must be complete to replay. After a write error (a full
+  disk, say) the file is abandoned and everything later is dropped; the caller keeps going.
+  """
+
+  def __init__(self, path: str | Path, *, name: str, max_buffer_bytes: int, flush_every_s: float, block_when_full: bool = False) -> None:
+    self.path = Path(path)
+    self.path.parent.mkdir(parents=True, exist_ok=True)
+    self._file = self.path.open("w", encoding="utf-8")
+    self._max_bytes = max(1, int(max_buffer_bytes))
+    self._flush_every_s = max(0.0, float(flush_every_s))
+    self._block = block_when_full
+    self._cond = threading.Condition()
+    self._lines: deque[str] = deque()
+    self._buffered = 0
+    self._accepted = 0
+    self._settled = 0  # accepted lines that are flushed to the OS or given up on
+    self._closing = False
+    self._flush_wanted = False
+    self.written = 0
+    self.dropped = 0
+    self.error: str | None = None
+    self._thread = threading.Thread(target=self._run, name=f"nervlynx-{name}-writer", daemon=True)
+    self._thread.start()
+
+  def put(self, line: str) -> bool:
+    """Queue one line (with its newline); False if it was dropped."""
+    size = len(line)
+    with self._cond:
+      while self._block and self._full(size) and not self._closing and self.error is None and self._thread.is_alive():
+        self._cond.wait(0.5)
+      if self._closing or self.error is not None or self._full(size):
+        self.dropped += 1
+        return False
+      self._lines.append(line)
+      self._buffered += size
+      self._accepted += 1
+      if len(self._lines) == 1:
+        self._cond.notify_all()
+      return True
+
+  def flush(self, timeout_s: float = 5.0) -> bool:
+    """Wait until every line queued so far has reached the OS (or been given up on)."""
+    with self._cond:
+      target = self._accepted
+      self._flush_wanted = True
+      self._cond.notify_all()
+      self._cond.wait_for(lambda: self._settled >= target or not self._thread.is_alive(), timeout_s)
+      return self._settled >= target
+
+  def close(self, timeout_s: float = 10.0) -> None:
+    """Write what is queued, then close the file. Safe to call more than once."""
+    with self._cond:
+      self._closing = True
+      self._cond.notify_all()
+    self._thread.join(timeout_s)
+    if self._thread.is_alive():
+      self.error = self.error or f"still writing after {timeout_s:g}s; the end of {self.path.name} may be missing"
+      return
+    try:
+      self._file.close()
+    except OSError as exc:
+      self.error = self.error or f"{type(exc).__name__}: {exc}"
+
+  def _full(self, size: int) -> bool:
+    return bool(self._lines) and self._buffered + size > self._max_bytes
+
+  def _run(self) -> None:
+    unflushed = 0
+    last_flush = time.monotonic()
+    while True:
+      with self._cond:
+        if not (self._lines or self._closing or self._flush_wanted):
+          self._cond.wait(self._flush_every_s if unflushed else None)
+        batch, self._lines, self._buffered = self._lines, deque(), 0
+        closing, flush_now, self._flush_wanted = self._closing, self._flush_wanted, False
+        self._cond.notify_all()
+      if batch:
+        unflushed += self._write("".join(batch), len(batch))
+      now = time.monotonic()
+      if closing or flush_now or now - last_flush >= self._flush_every_s:
+        self._flush_file()
+        last_flush = now
+        with self._cond:
+          self._settled += unflushed
+          self._cond.notify_all()
+        unflushed = 0
+      if closing:
+        with self._cond:
+          if not self._lines:
+            return
+
+  def _write(self, text: str, count: int) -> int:
+    if self.error is None:
+      try:
+        self._file.write(text)
+        self.written += count
+        return count
+      except Exception as exc:
+        self.error = f"{type(exc).__name__}: {exc}"
+    with self._cond:
+      self.dropped += count
+      self._settled += count
+      self._cond.notify_all()
+    return 0
+
+  def _flush_file(self) -> None:
+    if self.error is None:
+      try:
+        self._file.flush()
+      except Exception as exc:
+        self.error = f"{type(exc).__name__}: {exc}"
+
+
 class TraceRecorder:
-  """Appends every published message to a JSONL trace readable by `robot-core replay`."""
+  """Appends every published message to a JSONL trace readable by `robot-core replay`.
+
+  Messages are encoded on the calling thread, since a payload may change after it is
+  published, and written by a `LineWriter`.
+  """
 
   def __init__(
     self,
@@ -30,57 +154,71 @@ class TraceRecorder:
     *,
     exclude_topics: Iterable[str] = (),
     max_messages: int | None = 2_000_000,
-    flush_every: int = 256,
+    max_buffer_bytes: int = 8 << 20,
+    block_when_full: bool = False,
   ) -> None:
     self.path = Path(path)
-    self.path.parent.mkdir(parents=True, exist_ok=True)
-    self._file: TextIO | None = self.path.open("w", encoding="utf-8")
     self._exclude = frozenset(exclude_topics)
     self._max = max_messages
-    self._flush_every = max(1, flush_every)
-    self.written = 0
+    self._queued = 0
     self.skipped = 0
+    self._writer = LineWriter(self.path, name="trace", max_buffer_bytes=max_buffer_bytes, flush_every_s=1.0, block_when_full=block_when_full)
+
+  @property
+  def written(self) -> int:
+    return self._writer.written
+
+  @property
+  def dropped(self) -> int:
+    return self._writer.dropped
+
+  @property
+  def error(self) -> str | None:
+    return self._writer.error
 
   def __call__(self, msg: RuntimeMessage) -> None:
-    if self._file is None or msg.envelope.topic in self._exclude:
+    if msg.envelope.topic in self._exclude:
       return
-    if self._max is not None and self.written >= self._max:
+    if self._max is not None and self._queued >= self._max:
       self.skipped += 1
       return
-    self._file.write(json.dumps(encode_message(msg), separators=(",", ":"), default=str) + "\n")
-    self.written += 1
-    if self.written % self._flush_every == 0:
-      self._file.flush()
+    if self._writer.put(json.dumps(encode_message(msg), separators=(",", ":"), default=str) + "\n"):
+      self._queued += 1
+
+  def flush(self, timeout_s: float = 5.0) -> bool:
+    return self._writer.flush(timeout_s)
 
   def close(self) -> None:
-    if self._file is not None:
-      self._file.close()
-      self._file = None
+    self._writer.close()
 
 
 class FaultLog:
-  """Streams structured faults to JSONL as they happen (thread-safe)."""
+  """Streams structured faults to JSONL as they happen, from any thread, without waiting on the disk."""
 
-  def __init__(self, path: str | Path) -> None:
+  def __init__(self, path: str | Path, *, block_when_full: bool = False) -> None:
     self.path = Path(path)
-    self.path.parent.mkdir(parents=True, exist_ok=True)
-    self._lock = threading.Lock()
-    self._file: TextIO | None = self.path.open("w", encoding="utf-8")
-    self.count = 0
+    self._writer = LineWriter(self.path, name="faults", max_buffer_bytes=1 << 20, flush_every_s=0.0, block_when_full=block_when_full)
+
+  @property
+  def count(self) -> int:
+    return self._writer.written
+
+  @property
+  def dropped(self) -> int:
+    return self._writer.dropped
+
+  @property
+  def error(self) -> str | None:
+    return self._writer.error
 
   def __call__(self, event: FaultEvent) -> None:
-    with self._lock:
-      if self._file is None:
-        return
-      self._file.write(json.dumps(event.to_dict()) + "\n")
-      self._file.flush()
-      self.count += 1
+    self._writer.put(json.dumps(event.to_dict()) + "\n")
+
+  def flush(self, timeout_s: float = 5.0) -> bool:
+    return self._writer.flush(timeout_s)
 
   def close(self) -> None:
-    with self._lock:
-      if self._file is not None:
-        self._file.close()
-        self._file = None
+    self._writer.close()
 
 
 def _counter_totals(runtime: LiveRuntime, name: str, label: str) -> dict[str, float]:

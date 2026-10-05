@@ -94,11 +94,12 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
     shutil.copyfile(path, out_dir / path.name)
   if overlays:
     echo(f"overlays={','.join(path.name for path in overlays)}")
-  fault_log = FaultLog(out_dir / "faults.jsonl")
+  # Simulated time waits for the disk instead of dropping lines, so its traces stay complete.
+  fault_log = FaultLog(out_dir / "faults.jsonl", block_when_full=clock.simulated)
   runtime.add_fault_listener(fault_log)
   recorder = None
   if not opts.no_record:
-    recorder = TraceRecorder(out_dir / "trace.jsonl", exclude_topics=list(opts.record_exclude))
+    recorder = TraceRecorder(out_dir / "trace.jsonl", exclude_topics=list(opts.record_exclude), block_when_full=clock.simulated)
     runtime.add_message_listener(recorder)
 
   server = None
@@ -147,6 +148,11 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
       recorder.close()
     fault_log.close()
   wall_finished = time.time()
+  for label, log in (("trace", recorder), ("fault_log", fault_log)):
+    if log is not None and log.dropped:
+      echo(f"{label}_dropped={log.dropped} (the disk fell behind; the control loop did not wait for it)")
+    if log is not None and log.error:
+      echo(f"{label}_error={log.error}")
 
   artifacts = {"config": str(out_dir / "config.yaml"), "faults": str(out_dir / "faults.jsonl")}
   for path in overlays:
@@ -160,7 +166,14 @@ def run_session(config: Path, opts: SessionOptions, echo: Callable[[str], Any]) 
     wall_started=wall_started,
     wall_finished=wall_finished,
     artifacts=artifacts,
-    extra={"trace_messages": recorder.written if recorder else 0, "fault_log_entries": fault_log.count, "mode": opts.mode, "device": device},
+    extra={
+      "trace_messages": recorder.written if recorder else 0,
+      "trace_dropped": recorder.dropped if recorder else 0,
+      "fault_log_entries": fault_log.count,
+      "fault_log_dropped": fault_log.dropped,
+      "mode": opts.mode,
+      "device": device,
+    },
   )
   (out_dir / "report.json").write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")
   markdown = render_markdown(report)
