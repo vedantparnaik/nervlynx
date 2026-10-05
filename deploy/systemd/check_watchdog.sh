@@ -14,7 +14,7 @@ project="$HOME/nervlynx-projects/$name"
 unit="nervlynx-$name"
 
 prop() { systemctl --user show "$unit" -p "$1" --value; }
-journal() { sudo journalctl --user-unit "$unit" --no-pager -o cat; }
+journal() { journalctl --user -u "$unit" --no-pager -o cat; }
 # grep -c reads everything, so journalctl never dies of SIGPIPE under pipefail.
 logged() { journal | grep -c -i -- "$1" > /dev/null; }
 fail() {
