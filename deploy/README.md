@@ -6,7 +6,7 @@ This directory holds **reference** deployment material. Validate paths, users, a
 | --- | --- |
 | `config/` | Example graph YAML (`graph_surveillance.yaml`) and robot profile (`robot_profile.yaml`). |
 | `docker/` | Dockerfile and compose snippet for containerized runs. |
-| `systemd/` | Unit files: `nervlynx-surveillance.service` (smoke runner) and `nervlynx-rover.service` (live rover graph with dashboard; set `NERVLYNX_CONTROL_TOKEN`). |
+| `systemd/` | Unit files: `nervlynx-surveillance.service` (smoke runner) and `nervlynx-rover.service` (live rover graph with dashboard; set `NERVLYNX_CONTROL_TOKEN`). `check_watchdog.sh` checks the systemd watchdog against real systemd (run in CI). |
 | `scripts/` | Edge install (`install_edge.sh`) and config sync (`sync_config.py`). |
 
 See also: `README.md` (Deployment Shortcuts) and `docs/RELEASE_PROCESS.md` for release artifacts.

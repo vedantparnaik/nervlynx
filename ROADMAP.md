@@ -39,6 +39,8 @@
 ### M5 - Live Runtime and Hardware
 - [x] Continuous executor with fixed-rate ticks, simulated clock, and per-session run reports (`robot-core run-live`).
 - [x] Layered actuator safety: deadman, latched e-stop, watchdog, circuit breaker, stall guard.
+- [x] Survive a frozen process: systemd watchdog (restart), a `heartbeat` pin for hardware motor cut-off, and log writes off the control thread.
+- [ ] Heartbeat cut-off circuit tested on a real robot.
 - [x] GPIO backends and BTS7960/TB6612 skid-steer drive with a simulated plant.
 - [x] Live dashboard, teleop, Prometheus metrics, and `robot-core top`.
 - [ ] Wheel encoder / IMU sensor nodes and closed-loop speed control.

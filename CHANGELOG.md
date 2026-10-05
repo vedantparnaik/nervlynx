@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **systemd watchdog** (`robot_core/systemd.py`): under a unit with `NotifyAccess=main`, NervLynx arms systemd's watchdog once the executor is stepping (so slow start-up never trips it) and feeds it while steps complete. If the executor stops for about `runtime.systemd_watchdog_s` (default 5 s; `null` turns it off), systemd kills the process with every thread's stack in the journal (faulthandler) and `Restart=on-failure` starts it again; shutdown gets a fixed 30 s budget instead. A unit's own `WatchdogSec=` is honoured. The units from `nervlynx deploy --service`, `nervlynx fleet`, and `deploy/systemd/` now set `NotifyAccess=main` and `TimeoutAbortSec=5` (deploy with `--service` again to update an installed one). A `systemd-watchdog` CI job checks it against real systemd: a slow start and a healthy run are left alone, a frozen process and a hung control loop are restarted, and a normal stop still writes its report.
+- **`heartbeat`** node: a square wave on a GPIO pin while the robot may move, held low on e-stop, from the moment the stall guard fires, and at shutdown, so a small circuit (a retriggerable monostable or a microcontroller) can cut motor power when the edges stop, even if the software has crashed or frozen. Wiring notes are in [docs/LIVE_RUNTIME.md](docs/LIVE_RUNTIME.md).
+- Validation rejects a GPIO pin claimed by two nodes that run at the same time on the same computer; nodes report their pins through `LiveNode.gpio_pins()` (the drive, `hcsr04_range`, and `heartbeat` do).
+- `LiveRuntime.steps`, `LiveRuntime.stopping`, and `LiveRuntime.last_step_age_s()` for watching the executor from other threads.
+
 - **Calibration wizard** in the dashboard (Calibrate section, needs control access): spin each motor and invert the ones that turn backwards, check driving and swap sides, find the smallest power that moves the robot (`min_duty`), work out the IMU's mounting from two poses, and jog servos to their travel limits. Steps run on the executor thread through the new `LiveRuntime.call_node`, refuse to move anything while the e-stop is latched, and stop on any real drive command. Save writes `calibration.yaml`.
 - **Per-robot overlays** (`robot_core/overlay.py`): `overlay.yaml` and `calibration.yaml` beside robot.yaml patch it for one robot, addressing nodes by name and merging motor/servo lists by name; stale names fail validation. Runs record the overlays they used, `validate` lists them, and `deploy` never copies or deletes them.
 - **`pca9685_servos`**: hobby servos on a PCA9685 over I2C with pulse limits, angle clamping, per-servo speed limits, a home position, and `on_stop: hold|relax` on e-stop and shutdown.
@@ -99,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Run traces and fault logs are written on background threads (`robot_core.report.LineWriter`), so a slow or stalled SD card no longer holds up the executor or the stall guard. In real time, lines the disk cannot keep up with are dropped and counted (`trace_dropped` and `fault_log_dropped` in `report.json`, and a line at exit); simulated-time runs wait for the disk, so their traces stay complete and deterministic. A failing disk is reported at exit instead of stopping the run.
+- The stall guard hard-stops actuators before it records the stall fault, and hard-stop failures are recorded only after every node has been stopped, so no log write can delay a stop.
 - `skid_steer_drive` gains `swap_sides` and live-changeable motor inversion and duty floors (for the wizard); `mpu6050_imu` gains `axes` and publishes in the robot's frame.
 - The `dev` extra also installs eclipse-zenoh, numpy, and Pillow so CI covers the mesh and detector code; new extras `mesh` and `ai`.
 - `from nervlynx import skill` is available alongside `node`.

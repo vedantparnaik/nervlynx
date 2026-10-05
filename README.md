@@ -55,10 +55,11 @@ Wire it as the project's `README.md` shows, then from your laptop:
 nervlynx deploy pi@my-rover.local --remote-nervlynx '~/.venv/bin/nervlynx' --service
 ```
 
-That copies the project, checks it on the robot, and starts it (and at every boot). The
-dashboard is at `http://my-rover.local:9120/` from your phone. `nervlynx logs` follows it;
-`nervlynx pull` brings recorded runs back to the laptop. Or run it by hand on the Pi with
-`nervlynx run` (add `--control` to drive from the dashboard).
+That copies the project, checks it on the robot, and starts it (and at every boot, and
+again if it ever freezes). The dashboard is at `http://my-rover.local:9120/` from your
+phone. `nervlynx logs` follows it; `nervlynx pull` brings recorded runs back to the
+laptop. Or run it by hand on the Pi with `nervlynx run` (add `--control` to drive from
+the dashboard).
 
 The same `robot.yaml` runs in both places: `hardware.backend: auto` uses real pins on the
 Pi and mock pins elsewhere, and nodes marked `only: sim` or `only: robot` (the simulated
@@ -95,7 +96,7 @@ saves them for that robot in `calibration.yaml`.
 - **Nodes are functions**: `@node` in `nodes/*.py`, no packaging; stale sensor data pauses the node so the drive deadman stops the robot
 - **Simulate before you solder**: a 2D world with obstacles, ultrasonic-style range sensors, collisions, and a live top-down view
 - **Live robot runtime**: run graphs continuously with fixed-rate control loops, a live dashboard with a touch joystick and camera streams, and a trace plus report for every session
-- **Safety by default**: drive deadman, latched e-stop, liveness watchdog, per-node circuit breakers, and a stall guard that stops actuators if the executor hangs
+- **Safety by default**: drive deadman, latched e-stop, liveness watchdog, per-node circuit breakers, a stall guard that stops actuators if the executor hangs, a systemd watchdog that restarts a frozen process, and a `heartbeat` pin so hardware can cut motor power when the software stops
 - **Hardware ready**: gpiozero/lgpio (works on the Pi 5), L298N, TB6612, and BTS7960 motor drivers, HC-SR04, MPU6050, GPS, and LiDAR sensors, PCA9685 servos, wheel odometry, Pi and USB cameras, and an ESP32 link, each with a mock twin for laptops and CI
 - **Perception and agents**: an object detector on CPU, Hailo, or TensorRT; skills that people, voice, and LLMs can call without ever bypassing the safety layers
 - **Beyond one board**: a device mesh over UDP or Zenoh, a ROS 2 bridge, and fleet deploys with automatic rollback

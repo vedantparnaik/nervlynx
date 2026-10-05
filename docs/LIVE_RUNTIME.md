@@ -78,7 +78,9 @@ robot-core top http://127.0.0.1:9120
    behaves.
 
 4. To run at boot, see `deploy/systemd/nervlynx-rover.service`. It sends SIGINT on stop so
-   motors are stopped and the report is written before the process exits.
+   motors are stopped and the report is written before the process exits, and lets
+   NervLynx arm systemd's watchdog so a frozen process is restarted (see the
+   [safety model](#safety-model)).
 
 Only one process can own the motor pins. Stop any other motor server before starting a
 hardware graph.
@@ -99,6 +101,7 @@ runtime:
   topic_priority: {safety.estop: 0}          # lower value dispatches first (default 100)
   latest_topics: [range.front, camera.frame] # deliver only the newest pending message
   max_inbox_size: 4096         # messages waiting from other threads; extra ones are dropped
+  systemd_watchdog_s: 5        # as a service: restart if the executor stops this long; null disables
   seed: 7                      # trace-ID seed (defaults to 0 on a simulated clock)
 
 safety:
@@ -191,6 +194,7 @@ used next to its report.
 | Plugin | What it is | Details |
 | --- | --- | --- |
 | `skid_steer_drive` | DC motors on L298N, TB6612, or BTS7960 drivers | below |
+| `heartbeat` | A pin that toggles while the robot may move, so hardware can cut motor power when it stops | below |
 | `hcsr04_range`, `mpu6050_imu`, `gps_nmea`, `lidar` | Distance, IMU, GPS, and LiDAR sensors | below |
 | `camera`, `detector` | Pi or USB camera, and object detection on its frames | below |
 | `pca9685_servos` | Hobby servos on a PCA9685 board | below |
@@ -229,6 +233,34 @@ onto `[floor, 1]` so small commands still move; `kick_duty` 0.55 for `kick_s` 0.
 static friction when a side starts from rest (re-armed after `kick_rearm_s` 0.5 at rest);
 `slew_per_s` 4.0 ramps duty so four motors never step to full together and sag the
 battery; reversals coast through zero. Stops are always immediate.
+
+### `heartbeat`
+
+Every stop in software needs the software to be running. The `heartbeat` node covers the
+rest: it toggles a pin on every tick, and holds it low while the e-stop is latched, from
+the moment the stall guard fires, and at shutdown. When NervLynx crashes, freezes, or the
+Pi loses power, the pin simply stops changing, and hardware that watches it can turn the
+motors off by itself.
+
+| Param | Default | Meaning |
+| --- | --- | --- |
+| `pin` | required | BCM pin. Avoid the I2C, SPI, and UART pins; GPIO 26 is a good choice |
+| `frequency_hz` | 25 | Square-wave frequency; the node ticks at twice this |
+| `backend` | `mock` | As for the drive (or `hardware.backend`) |
+
+Between the pin and the motor driver, put something that keeps the driver enabled only
+while rising edges keep arriving: a retriggerable monostable such as a 74HC123 or CD4538
+on its rising-edge input, or a small microcontroller doing the same. Its output goes to
+the driver's enable: STBY on a TB6612, R_EN and L_EN on a BTS7960, or ENA and ENB on an
+L298N (through an AND gate with the PWM when `en` carries it). A timeout of a few periods,
+around 100 ms, stops the robot quickly without tripping on normal jitter; the run
+report's lateness column for the `heartbeat` node shows how late its ticks get. Never
+wire the pin straight to an enable input: if NervLynx froze while the pin was high, the
+motors would stay powered.
+
+Test it with the wheels off the ground: while the motors turn, freeze NervLynx with
+`kill -STOP <pid>`, and the wheels must stop within the timeout. The node is tested in
+CI; a cut-off circuit built this way has not been tested on a robot yet.
 
 ### `scripted_drive`
 
@@ -493,11 +525,26 @@ Layered so that no single failure leaves motors running:
 | Circuit breaker | A node raises `threshold` times in a row | Node skipped for `cooldown_s`, then retried; its `safe_stop()` runs |
 | Stall guard (separate thread) | The executor has not completed a step within `stall_timeout_s` | Every node's thread-safe `hard_stop()` from outside the executor, then e-stop |
 | Shutdown / Ctrl-C / SIGTERM | Process exit | `safe_stop()` and `hard_stop()` on all nodes before teardown |
+| systemd watchdog (separate process) | Running as a service, and the executor has completed no step for about `systemd_watchdog_s` | systemd kills NervLynx, with every thread's stack in the journal, and starts it again |
+| Heartbeat pin (`heartbeat` node plus a small circuit) | The pin stops toggling: e-stop, stall guard, shutdown, a crash, a freeze, or lost power | The circuit disables the motor driver, with no software involved |
 
 E-stop details: engaging it from HTTP calls `hard_stop()` immediately on the request
 thread, then latches on the next step. Clearing is refused while any critical node is
 stale. After a clear the drive stays stopped until it receives a fresh command, so an old
 command cannot resume motion.
+
+The stall guard stops actuators before it records anything, and run logs are written on
+their own threads, so a slow SD card never delays a stop.
+
+The systemd watchdog is armed only once the executor is stepping, so slow start-up never
+trips it, and only by units that allow it (`NotifyAccess=main`, as in the units
+`nervlynx deploy --service` writes and `deploy/systemd/`). It restarts a frozen process but
+cannot stop that process's motors meanwhile; that is what the heartbeat pin, or a motor
+board with its own command timeout such as the [ESP32 link](ESP32_LINK.md), is for. A
+restarted robot starts as if it had just booted; set `safety.start_in_estop: true` if it
+should wait for an operator to clear the e-stop. CI checks the watchdog against real
+systemd (`deploy/systemd/check_watchdog.sh`): a slow start and a healthy run are left
+alone, and a frozen process or a hung control loop is restarted.
 
 ## Observability
 
@@ -557,6 +604,11 @@ Every `run-live` session writes `logs/live/<graph>-<timestamp>/` (or `--run-dir`
 | `report.json` | Duration, platform, message totals, per-node tick/lateness/handler percentiles, per-topic rates and trace latency, safety events, fault counts |
 | `report.md` | The same report as Markdown tables (also printed at exit) |
 | `metrics.prom` | Final Prometheus snapshot |
+
+The trace and fault log are written on their own threads. In real time, when the disk
+cannot keep up, new lines are dropped and counted (`trace_dropped` and
+`fault_log_dropped` in `report.json`, and a line at exit) rather than slowing the robot;
+simulated-time runs wait for the disk instead, so their traces are always complete.
 
 `--strict` makes the command exit 2 if any node error, watchdog fault, stall, or e-stop
 occurred, which is handy in CI and soak tests.
